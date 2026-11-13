@@ -1,25 +1,28 @@
 # strata
 
-A CMake configuration generator that derives software features from a description of the target.
+Turns configuration items into named features that CMake and C/C++ code read.
 
-Most projects of any size carry two kinds of knowledge in the same places: what
-the target hardware *is* — which chip, which board, which options were fitted —
-and what the software *provides* for a given build. The two get welded together
-in preprocessor expressions, and every new product edits code that was supposed
-to be independent of the hardware.
+Configuration arrives in the vocabulary of whoever owns it: chip part numbers,
+board revisions, customer tiers, region codes, capability flags. Code that reads
+those raw items is coupled to decisions it did not make and cannot review, and
+when the configuration changes shape, the code changes with it — usually in
+places that had no business knowing where the value came from.
 
-strata keeps them apart. The target is described as data; the software's
-features are derived from that description by functions that live next to the
-component they belong to. The derivation is written once, so it can be reviewed,
-explained and tested, instead of being copied into every use site.
+strata puts a layer between the two. Configuration items are declared once, in
+one global vocabulary. Each component declares the features it exposes and the
+functions that derive them from those items, so a feature is a name the software
+can reason about rather than a raw setting it has to interpret.
 
-The derived features are typed values that both the build system and the C/C++
-code read, from the same generated files. Changing the target description changes
-what gets compiled and what gets enabled, without either side learning how the
-hardware happens to provide a capability.
+The build system and the C/C++ code read features and never the items directly.
+Introducing a new chip, a new customer tier or a new region is then a new
+derivation, not an edit to code that should not care about the origin of a value.
 
-It pays off when one codebase has to produce several products. It is not worth it
-for a single target with a single switch — a CMake `option()` is cheaper.
+Hardware is the usual first case — several different chips can provide the same
+capability — but nothing in strata is specific to hardware. Any configuration
+that has more than one answer is a candidate.
+
+It pays off when one codebase has to serve several configurations. It is not
+worth it for a single build with a single switch — a CMake `option()` is cheaper.
 
 ## Table of Contents
 
@@ -40,7 +43,7 @@ project it serves, and it brings its own history.
 ```
 your-project/
 ├── strata/                 this repository
-├── configs/                target descriptions and presets
+├── configs/                configuration items and presets
 ├── components/             features and the functions that derive them
 └── CMakeLists.txt
 ```
@@ -92,8 +95,8 @@ int main(void)
 }
 ```
 
-What is behind a feature — a BLE module, a programmable I/O controller, a UART
-adapter — never reaches this file.
+Which configuration item made the feature true — a BLE module, a programmable
+I/O controller, a customer tier — never reaches this file.
 
 ## Concepts
 
@@ -102,17 +105,17 @@ files, output and errors.
 
 | Term | Definition | What matters |
 | --- | --- | --- |
-| **Problem-domain schema** | The global vocabulary of the target: dimensions with ids, types, ranges, defaults and docs | Components read it; they never extend it. Ids are globally unique |
-| **Dimension** | One fact or number in that vocabulary, e.g. `chip.pioc`, `board.uart_count` | Typed: `bool`, `int`, `float` or `string` |
-| **Preset** | One complete assignment of dimensions — one product | Anything not given falls back to the schema default |
+| **Configuration schema** | The global vocabulary of configuration items: ids, types, ranges, defaults and docs | Components read it; they never extend it. Ids are globally unique |
+| **Configuration item** | One declared value, e.g. `chip.pioc`, `board.uart_count`, `tier.pro` | Typed: `bool`, `int`, `float` or `string`. Its meaning belongs to whoever owns that domain |
+| **Preset** | One complete assignment of items — one product, one deployment, one customer | Anything not given falls back to the schema default |
 | **Component** | A directory holding `strata_features.toml` (contract) next to `strata_features.py` (resolvers) | Owns its features and declares one `layer` |
-| **Feature** | A typed value derived from the problem domain, readable by both the build and the code, e.g. `ctl.SUPPORT_WIRELESS_TUNNEL` | Globally unique; depends on problem-domain values only, **never on another feature** |
+| **Feature** | A named, typed value derived from configuration items, readable by both the build and the code, e.g. `ctl.SUPPORT_WIRELESS_TUNNEL` | This is the software's vocabulary, not the configuration's. Globally unique; depends on items only, **never on another feature** |
 | **Resolver** | The function that computes one feature: `@feature("...")` and `(config) -> value` | One feature, one resolver, one owner |
-| **config object** | The problem-domain view handed to a resolver (`config.chip.pioc`) | Every read is recorded — this is how provenance is recovered |
+| **config object** | The configuration view handed to a resolver (`config.chip.pioc`) | Every read is recorded — this is how provenance is recovered |
 | **Layer** | A visibility boundary for features | Emitted into that layer's own header; crossing layers is possible but not handed to you |
 | **Views** | The generated artifacts: one CMake view, one C header per layer | Produced by one run, so they cannot disagree |
-| **Manifest** | `strata_manifest.json`: values, owners, the variables read (`by`), input hashes | The answer to "why is this enabled?" |
-| **Escape hatch** | Every problem-domain value, exported as `STRATA_CONFIG_*` | Available on purpose, discouraged on purpose: reading it re-couples the code to hardware |
+| **Manifest** | `strata_manifest.json`: values, owners, the items read (`by`), input hashes | The answer to "why is this enabled?" |
+| **Escape hatch** | Every configuration item, exported as `STRATA_CONFIG_*` | Available on purpose, discouraged on purpose: reading it re-couples the code to the raw vocabulary |
 
 ## What strata is not
 
@@ -123,6 +126,7 @@ files, output and errors.
 | A build system | It compiles nothing; it produces input that CMake consumes |
 | A runtime switch service | It covers build-time and compile-time decisions only, never what a running device does |
 | An enforcement mechanism | It provides the layered path and makes the other path visible; it does not block it |
+| A hardware tool | Hardware is the usual first case, not the subject. Any configuration with more than one answer fits the same shape |
 
 ## Diagnostics
 
@@ -151,7 +155,7 @@ resolvers that raise.
 | `strata_add_component` | `(<name> [LAYER <layer>])` | Register a component; creates the imported target `strata::<name>` whose include path is that layer's header directory |
 | `strata_link_resolves` | `(<target> <component>...)` | Subscribe a target to the generated views |
 | `strata_get_feature` | `(<feature-id> <out-var>)` | Read a feature value for build decisions |
-| `strata_get_config` | `(<config-id> <out-var>)` | Read a raw problem-domain value (discouraged) |
+| `strata_get_config` | `(<config-id> <out-var>)` | Read a raw configuration item (discouraged) |
 
 Notes:
 
@@ -180,9 +184,9 @@ to is decided by the include path: a target subscribed to `ctl` cannot name
 
 Naming: a feature `ctl.MAX_TUNNEL_SESSIONS` becomes
 `STRATA_FEATURE_CTL_MAX_TUNNEL_SESSIONS` in C and
-`STRATA_FEATURE_ctl.MAX_TUNNEL_SESSIONS` in CMake; a dimension `chip.pioc`
-becomes `STRATA_CONFIG_CHIP_PIOC`. The two prefixes never overlap, so the prefix
-alone tells you whether you are holding a fact or a capability.
+`STRATA_FEATURE_ctl.MAX_TUNNEL_SESSIONS` in CMake; a configuration item
+`chip.pioc` becomes `STRATA_CONFIG_CHIP_PIOC`. The two prefixes never overlap, so
+the prefix alone tells you whether you are holding an item or a feature.
 
 ## Contributing
 
