@@ -1,34 +1,48 @@
 # strata
 
-> **strata derives the software's features from a description of the target, and
-> keeps that derivation as one explicit, reviewable artifact.**
+**strata is a configuration generator for CMake-based C/C++ projects.**
 
-Read that sentence again: three claims are packed into it, and each one carries a
-design consequence.
+You describe the target — which chip, which board, which product tier — as data
+in a few TOML files, and write small Python functions that turn that description
+into named, typed values called **features**. strata runs during CMake's
+configure step and writes two things: a CMake file, and one C header per layer.
+Your build scripts read the first to decide what to compile; your code reads the
+second to decide what to enable. Both come from the same run, so they cannot
+disagree.
 
-**1. "a description of the target" is a model of its own.**
-What the hardware *is* — which chip, which board, which product tier — is
-written down as data: named values with types, ranges and defaults. It is owned
-by the people who know the hardware, changed at the rate the hardware changes,
-and it says nothing about software.
+A preset such as
 
-**2. "the derivation" is an artifact, not a habit.**
-The correspondence between the two sides — *"PIOC or PLB is enough to offload
-JTAG"* — is written once, in one place, where it can be reviewed, explained and
-tested. Today it lives inside preprocessor expressions: unnamed, duplicated,
-never verified.
+```toml
+# configs/presets/daplink_plb.toml
+chip.pioc              = true
+product.wireless_debug = true
+```
 
-**3. The result is shared by two consumers.**
-Derivation produces typed **features**. The build system reads them to decide
-what to compile and link; the C/C++ code reads them to decide what to enable.
-Both read the *same* values from the *same* run, so build-time pruning and
-compile-time branching cannot drift apart.
+becomes, at configure time,
 
-Everything else in this document is consequence.
+```c
+#define STRATA_FEATURE_CTL_SUPPORT_WIRELESS_TUNNEL 1
+#define STRATA_FEATURE_CTL_MAX_TUNNEL_SESSIONS     1
+```
+
+so the control plane can write
+
+```c
+#if STRATA_FEATURE_CTL_SUPPORT_WIRELESS_TUNNEL
+    tunnel_start(STRATA_FEATURE_CTL_MAX_TUNNEL_SESSIONS);
+#endif
+```
+
+without knowing that a programmable I/O controller is what made it possible.
+
+Generating macros is the easy part — a CMake `option()` does that. **What makes
+it worth a tool** is that the derivation from *what the target is* to *what the
+software offers* is written once, in one place, where it can be reviewed,
+explained and tested. Everything else in this document follows from that.
 
 ---
 
-## What the definition changes
+## What it changes
 
 ```c
 /* Before: a control plane reading hardware facts it should not know.

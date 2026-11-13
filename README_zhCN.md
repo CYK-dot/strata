@@ -1,19 +1,35 @@
 # strata
 
-> **strata 把「目标是什么」推导成「软件提供什么」，并把这条推导保存为唯一一份可评审的产物。**
+**strata 是一个面向 CMake 工程的配置生成器。**
 
-这句话压着三个主张，每个都带一个设计后果。
+你把目标——用哪颗芯片、哪块板、哪个产品档位——写成几份 TOML 里的数据，再写几个小 Python 函数，把这些数据换算成带名字、带类型的值，称为 **feature**。strata 在 CMake 的 configure 阶段运行，产出两样东西：一份 CMake 文件，以及每一层一个 C 头文件。构建脚本读前者，决定编什么、链什么；源码读后者，决定开什么。两者来自同一次运行，所以不会各说各话。
 
-**一、「目标是什么」是一个独立的模型。**
-硬件是什么——哪颗芯片、哪块板、哪个产品档位——被写成数据：有名字、有类型、有取值范围、有默认值。它由懂硬件的人拥有，按硬件的节奏变化，并且不描述软件。
+一份预设
 
-**二、「推导」是一份产物，不是一种习惯。**
-两侧的对应关系——「有 PIOC 或 PLB 就够软卸载 JTAG」——只写一次、只放一处，因而可评审、可解释、可测试。今天它躺在预处理表达式里：没有名字，被复制多份，从未被验证过。
+```toml
+# configs/presets/daplink_plb.toml
+chip.pioc              = true
+product.wireless_debug = true
+```
 
-**三、结果被两个消费者共享。**
-推导产出带类型的 **feature**。构建系统读它决定编什么、链什么；C/C++ 读它决定开什么。两边读的是同一次运行的同一份值，所以构建期裁剪与编译期分支不可能各说各话。
+在 configure 阶段变成
 
-本文其余部分，都是这三条的推论。
+```c
+#define STRATA_FEATURE_CTL_SUPPORT_WIRELESS_TUNNEL 1
+#define STRATA_FEATURE_CTL_MAX_TUNNEL_SESSIONS     1
+```
+
+于是控制面可以这样写
+
+```c
+#if STRATA_FEATURE_CTL_SUPPORT_WIRELESS_TUNNEL
+    tunnel_start(STRATA_FEATURE_CTL_MAX_TUNNEL_SESSIONS);
+#endif
+```
+
+而不必知道「是可编程 I/O 控制器让它成为可能」。
+
+生成宏是容易的部分——CMake 的 `option()` 也能做。**让这件事值得做成一个工具**的，是「从目标是什么，到软件提供什么」这条推导只写一次、只放一处，可评审、可解释、可测试。本文其余部分，都由此而来。
 
 ---
 
