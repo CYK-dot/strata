@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 CYK-Dot
+
 """The ``config`` object handed to resolvers.
 
 Resolvers read the effective problem-domain values through attribute access::

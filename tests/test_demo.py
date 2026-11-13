@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 CYK-Dot
+
 """End to end against the real demo tree shipped next to this package."""
 
 from __future__ import annotations

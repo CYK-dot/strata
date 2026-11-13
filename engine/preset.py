@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 CYK-Dot
+
 """Presets: one file, one complete set of problem-domain values."""
 
 from __future__ import annotations

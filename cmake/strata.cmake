@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 CYK-Dot
+
 # strata - CMake integration (see ADR-0009)
 #
 #   strata_add_project(SCHEMA <dir> PRESETS <dir> COMPONENTS <dir> PRESET <name>

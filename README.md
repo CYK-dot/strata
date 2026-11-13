@@ -124,21 +124,10 @@ project/
 
 ## Usage
 
-### Command line
+There is nothing to run and nothing to install: strata works inside `CMakeLists.txt`,
+during the configure step.
 
-```bash
-python -m strata generate \
-  --schema     configs/schema \
-  --presets    configs/presets \
-  --components components \
-  --preset     daplink_plb \
-  --out        build/generated
-```
-
-Runs the pipeline for one preset and writes both views plus the manifest.
-Requires Python 3.11 or newer; no third-party runtime dependency.
-
-### CMake
+### In CMake
 
 ```cmake
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/strata/cmake)
@@ -185,9 +174,31 @@ Notes:
   later in the same `CMakeLists.txt`. The other four are functions.
 - Order matters: project, then components, then targets. `strata_get_feature`
   before `strata_add_project` is an error, not an empty value.
-- Generation runs at configure time, because CMake itself needs the values to
-  choose sources. Editing a schema, preset or resolver file triggers a
-  re-configure automatically (`CMAKE_CONFIGURE_DEPENDS`).
+- A change to any schema, preset or resolver file triggers a re-configure
+  automatically (`CMAKE_CONFIGURE_DEPENDS`), so the values can never be stale.
+
+### In C and C++
+
+`strata_link_resolves(firmware ctl)` puts the `ctl` layer's header on the
+target's include path. Nothing else is needed:
+
+```c
+#include "strata_features.h"
+
+int main(void)
+{
+#if STRATA_FEATURE_CTL_SUPPORT_WIRELESS_TUNNEL
+    tunnel_start(STRATA_FEATURE_CTL_MAX_TUNNEL_SESSIONS);
+#else
+    tunnel_start(0);
+#endif
+    return 0;
+}
+```
+
+All layers use the same header name, so which file `strata_features.h` resolves
+to is decided by the include path: a target subscribed to `ctl` cannot name
+`bsp`'s features, because that header is not on its path.
 
 ### Generated artifacts
 
@@ -200,7 +211,7 @@ build/generated/
 └── strata_manifest.json      values, provenance, input hashes
 ```
 
-Naming: a feature `ctl.MAX_TUNNEL_SESSIONS` becomes
+Names: a feature `ctl.MAX_TUNNEL_SESSIONS` becomes
 `STRATA_FEATURE_CTL_MAX_TUNNEL_SESSIONS` in C and
 `STRATA_FEATURE_ctl.MAX_TUNNEL_SESSIONS` in CMake; a dimension `chip.pioc`
 becomes `STRATA_CONFIG_CHIP_PIOC`. The two prefixes never overlap, so the prefix
@@ -229,14 +240,19 @@ resolvers that raise.
 
 ## Requirements
 
-Python 3.11+ (standard library only), CMake 3.20+.
+- CMake 3.20 or newer.
+- Python 3.11 or newer, standard library only. CMake invokes it during configure;
+  you never call it yourself.
 
 ---
 
 ## License
 
+Copyright (C) 2026 CYK-Dot.
+
 strata is free software, licensed under the **GNU General Public License,
-version 3**. The full text is in [LICENSE](LICENSE).
+version 3 or (at your option) any later version** (GPL-3.0-or-later). The full
+text is in [LICENSE](LICENSE).
 
 You may use, study, modify and redistribute it, including commercially, provided
 that derivative works are distributed under the same license and that recipients

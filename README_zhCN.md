@@ -103,20 +103,9 @@ project/
 
 ## 使用方式
 
-### 命令行
+没有需要运行的命令，也没有需要安装的东西：strata 就工作在 `CMakeLists.txt` 里，发生在 configure 阶段。
 
-```bash
-python -m strata generate \
-  --schema     configs/schema \
-  --presets    configs/presets \
-  --components components \
-  --preset     daplink_plb \
-  --out        build/generated
-```
-
-跑一个预设的完整流程，产出两侧视图与清单。需要 Python 3.11 及以上，无第三方运行时依赖。
-
-### CMake
+### 在 CMake 里
 
 ```cmake
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/strata/cmake)
@@ -160,7 +149,27 @@ endif()
 
 - **`strata_add_project` 是 macro 而不是 function**。生成的 `.cmake` 必须在调用者的作用域里 `include`，否则 `STRATA_FEATURE_*` 只活在函数局部，后面的 `strata_get_feature` 根本看不见。其余四个是 function。
 - **顺序有意义**：先工程、再组件、最后目标。在 `strata_add_project` 之前调用 `strata_get_feature` 是报错，不是返回空值。
-- **生成发生在配置期**，因为 CMake 自己要用这些值选源文件。改动声明、预设或 resolver 会自动触发重新配置（`CMAKE_CONFIGURE_DEPENDS`）。
+- **改动即重配**：声明、预设或 resolver 文件一变，CMake 自动重新配置（`CMAKE_CONFIGURE_DEPENDS`），值不会过期。
+
+### 在 C / C++ 里
+
+`strata_link_resolves(firmware ctl)` 会把 `ctl` 层的头文件放进该目标的 include 路径，其余什么都不用做：
+
+```c
+#include "strata_features.h"
+
+int main(void)
+{
+#if STRATA_FEATURE_CTL_SUPPORT_WIRELESS_TUNNEL
+    tunnel_start(STRATA_FEATURE_CTL_MAX_TUNNEL_SESSIONS);
+#else
+    tunnel_start(0);
+#endif
+    return 0;
+}
+```
+
+各层用同一个头文件名，所以 `strata_features.h` 到底解析到哪一份，由 include 路径决定：订阅了 `ctl` 的目标叫不出 `bsp` 的 feature，因为那份头文件不在它的路径上。
 
 ### 生成物
 
@@ -194,12 +203,15 @@ CMake Error at configs/presets/daplink_x.toml:2 (strata_add_project):
 
 ## 环境要求
 
-Python 3.11 及以上（仅用标准库），CMake 3.20 及以上。
+- CMake 3.20 及以上。
+- Python 3.11 及以上，仅用标准库。它由 CMake 在 configure 阶段调用，使用者不需要自己执行。
 
 ---
 
 ## 许可证
 
-strata 是自由软件，采用 **GNU 通用公共许可证第三版（GPLv3）**。全文见 [LICENSE](LICENSE)。
+Copyright (C) 2026 CYK-Dot。
+
+strata 是自由软件，采用 **GNU 通用公共许可证第三版或更新版本**（GPL-3.0-or-later）。全文见 [LICENSE](LICENSE)。
 
 含义是：你可以使用、研究、修改、再分发它，包括商业用途；条件是衍生作品同样以 GPLv3 分发，且接收者能拿到源码。没有担保。

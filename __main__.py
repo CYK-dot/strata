@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 CYK-Dot
+
 """Command line entry point: ``python -m strata generate ...``."""
 
 from __future__ import annotations

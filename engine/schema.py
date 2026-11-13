@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 CYK-Dot
+
 """Problem-domain schema: the vocabulary every component reads."""
 
 from __future__ import annotations

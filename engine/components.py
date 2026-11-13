@@ -1,4 +1,7 @@
-﻿"""Component discovery: contracts in TOML, resolvers in Python."""
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 CYK-Dot
+
+"""Component discovery: contracts in TOML, resolvers in Python."""
 
 from __future__ import annotations
 

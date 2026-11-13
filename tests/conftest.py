@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 CYK-Dot
+
 """Shared fixtures: a throwaway project tree plus a clean feature registry."""
 
 from __future__ import annotations

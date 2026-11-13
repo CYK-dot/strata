@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 CYK-Dot
+
 """The pipeline: schema -> preset -> components -> resolved features -> views."""
 
 from __future__ import annotations

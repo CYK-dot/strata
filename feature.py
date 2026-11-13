@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 CYK-Dot
+
 """The ``@feature`` decorator and its registration buffer.
 
 A component's ``strata_features.py`` declares one resolver per feature:

@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 CYK-Dot
+
 """Write the two views (CMake, C) plus the manifest."""
 
 from __future__ import annotations
