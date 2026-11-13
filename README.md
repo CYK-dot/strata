@@ -2,12 +2,13 @@
 
 Turns configuration items into named features that CMake and C/C++ code read.
 
-Configuration items pile up quickly: chip model, board revision, customer tier,
-region, optional hardware, build profile. The build and the code have to turn
-those items into decisions, and the usual way is to read them directly — `#ifdef`
-in the sources, `if()` in CMake.
+An item describes the target or the product — `board.has_ble_module`, `chip.pioc`,
+`tier.pro`. A feature describes what the software can do — `ctl.SUPPORT_WIRELESS_TUNNEL`.
+The second is derived from the first, once; the build and the code read only the
+second.
 
-That works while there are two items. As they grow:
+The obvious alternative is to read the items directly: `#ifdef` in the sources,
+`if()` in CMake. That works while there are two items. As they multiply:
 
 - the predicates grow with the items and with their combinations, and the same
   decision is copied into every place that needs it;
@@ -16,16 +17,14 @@ That works while there are two items. As they grow:
 - the build and the sources decide independently, and nothing keeps them in step;
 - nobody can answer "why is this enabled in this build?" without reading both.
 
-**The idea.** Nothing above the configuration should read the items. Derive what
-it needs instead.
+**The idea.** Nothing above the configuration should read the items; it should
+read what was derived from them.
 
 strata makes that derivation a layer of its own. Each component declares the
-features it exposes — named, typed values in the software's own vocabulary — and
-writes the function that derives each one from the configuration items. strata
-evaluates the declarations once and emits the result as a CMake file and as one C
-header per layer. The build and the code read features, never items: adding a
-chip, a tier or a region becomes a new derivation instead of an edit to code that
-should not care.
+features it exposes and writes the function that derives each one from the
+configuration items. strata evaluates the declarations once and emits the result
+as a CMake file and as one C header per layer. Adding a chip, a tier or a region
+becomes a new derivation instead of an edit to code that should not care.
 
 Hardware is the usual first case — several different chips can provide the same
 capability — but nothing in strata is specific to hardware. Any configuration
