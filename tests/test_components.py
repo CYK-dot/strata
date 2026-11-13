@@ -11,7 +11,7 @@ from strata.errors import StrataError
 
 def test_discovers_and_loads_resolvers(project):
     paths = project()
-    found = components_engine.discover(paths.components)
+    found = components_engine.load_all(paths.component_pairs)
     assert [component.id for component in found] == ["app"]
     assert sorted(found[0].resolvers) == ["app.DOUBLE", "app.FLAG"]
 
@@ -35,7 +35,7 @@ type = "bool"
         }
     )
     with pytest.raises(StrataError) as excinfo:
-        components_engine.discover(paths.components)
+        components_engine.load_all(paths.component_pairs)
     assert 'Feature "app.MISSING" is declared but has no resolver' in str(excinfo.value)
 
 
@@ -63,7 +63,7 @@ def extra(config):
         }
     )
     with pytest.raises(StrataError) as excinfo:
-        components_engine.discover(paths.components)
+        components_engine.load_all(paths.component_pairs)
     assert 'Feature "app.EXTRA" has a resolver but is not declared' in str(excinfo.value)
 
 
@@ -85,7 +85,7 @@ type = "bool"
         }
     )
     with pytest.raises(StrataError) as excinfo:
-        components_engine.discover(paths.components)
+        components_engine.load_all(paths.component_pairs)
     assert "does not declare a layer" in str(excinfo.value)
 
 
@@ -111,8 +111,12 @@ def flag(config):
 """,
         }
     )
+    pairs = [
+        ("app", paths.components / "app"),
+        ("other", paths.components / "other"),
+    ]
     with pytest.raises(StrataError) as excinfo:
-        components_engine.discover(paths.components)
+        components_engine.load_all(pairs)
     assert 'Feature "app.FLAG" is already declared in' in str(excinfo.value)
 
 
@@ -121,5 +125,5 @@ def test_resolver_file_syntax_error(project):
         {"components/app/feature/strata_features.py": "def broken(:\n"}
     )
     with pytest.raises(StrataError) as excinfo:
-        components_engine.discover(paths.components)
+        components_engine.load_all(paths.component_pairs)
     assert "Syntax error in resolver file" in str(excinfo.value)

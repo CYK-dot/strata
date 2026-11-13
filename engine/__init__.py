@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Iterable
 
 from . import components as components_mod
 from . import emit
@@ -35,20 +36,20 @@ class Result:
 def generate(
     schema_dir: str | Path,
     presets_dir: str | Path,
-    components_dir: str | Path,
+    components: Iterable[tuple[str, str | Path]],
     preset_name: str,
     out_dir: str | Path,
 ) -> Result:
     schema = schema_mod.load(schema_dir)
     preset = preset_mod.load(presets_dir, preset_name, schema)
-    components = components_mod.discover(components_dir)
-    resolved = resolve_mod.resolve_all(components, preset.values)
-    inputs = _inputs(schema_dir, presets_dir, components_dir, schema, preset, components)
-    written = emit.write(out_dir, schema, preset, components, resolved, inputs)
+    loaded = components_mod.load_all(components)
+    resolved = resolve_mod.resolve_all(loaded, preset.values)
+    inputs = _inputs(schema_dir, presets_dir, schema, preset, loaded)
+    written = emit.write(out_dir, schema, preset, loaded, resolved, inputs)
     return Result(
         schema=schema,
         preset=preset,
-        components=components,
+        components=loaded,
         resolved=resolved,
         inputs=inputs,
         written=written,
@@ -58,22 +59,18 @@ def generate(
 def _inputs(
     schema_dir: str | Path,
     presets_dir: str | Path,
-    components_dir: str | Path,
     schema: schema_mod.Schema,
     preset: preset_mod.Preset,
     components: list[components_mod.Component],
 ) -> dict[str, str]:
     inputs: dict[str, str] = {}
 
-    def add(path: Path, root: str | Path) -> None:
-        inputs[_relative(path, root)] = sha256_of(path)
-
     for path in schema.files:
-        add(path, schema_dir)
-    add(preset.file, presets_dir)
+        inputs[_relative(path, schema_dir)] = sha256_of(path)
+    inputs[_relative(preset.file, presets_dir)] = sha256_of(preset.file)
     for component in components:
-        add(component.decl_file, components_dir)
-        add(component.resolver_file, components_dir)
+        for path in (component.decl_file, component.resolver_file):
+            inputs[_relative(path, component.root)] = sha256_of(path)
     return dict(sorted(inputs.items()))
 
 

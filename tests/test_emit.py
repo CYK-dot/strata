@@ -12,7 +12,7 @@ def _generate(paths, name: str = "p1"):
     return generate(
         schema_dir=paths.schema,
         presets_dir=paths.presets,
-        components_dir=paths.components,
+        components=paths.component_pairs,
         preset_name=name,
         out_dir=paths.out,
     )

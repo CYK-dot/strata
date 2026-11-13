@@ -93,6 +93,7 @@ def project(tmp_path: Path):
             schema=root / "configs" / "schema",
             presets=root / "configs" / "presets",
             components=root / "components",
+            component_pairs=[("app", root / "components" / "app")],
             out=root / "build" / "generated",
         )
 

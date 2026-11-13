@@ -66,21 +66,26 @@ Dependencies:
 
 ## Usage
 
-Enable it once, near the top of `CMakeLists.txt`:
+The product is chosen when configuring, not in the build file, so one
+`CMakeLists.txt` builds every product:
+
+```sh
+cmake -B build/plb -DSTRATA_PRESET=daplink_plb
+```
+
+Enabled once, near the top of `CMakeLists.txt`:
 
 ```cmake
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/strata/cmake)
 include(strata)
 
 strata_add_project(
-  SCHEMA     ${CMAKE_CURRENT_SOURCE_DIR}/configs/schema
-  PRESETS    ${CMAKE_CURRENT_SOURCE_DIR}/configs/presets
-  COMPONENTS ${CMAKE_CURRENT_SOURCE_DIR}/components
-  PRESET     ${STRATA_PRESET}          # e.g. from -DSTRATA_PRESET=...
+  SCHEMA  ${CMAKE_CURRENT_SOURCE_DIR}/configs/schema
+  PRESETS ${CMAKE_CURRENT_SOURCE_DIR}/configs/presets
 )
 
-strata_add_component(ctl LAYER ctl)
-strata_add_component(bsp LAYER bsp)
+strata_add_component(ctl ${CMAKE_CURRENT_SOURCE_DIR}/components/ctl)
+strata_add_component(bsp ${CMAKE_CURRENT_SOURCE_DIR}/components/bsp)
 
 add_executable(firmware src/ctlp.c)
 strata_link_resolves(firmware ctl)
@@ -161,19 +166,24 @@ resolvers that raise.
 
 | Function | Signature | Purpose |
 | --- | --- | --- |
-| `strata_add_project` | `(SCHEMA <dir> PRESETS <dir> COMPONENTS <dir> PRESET <name> [OUT <dir>])` | Generate at configure time and load feature values into the current scope |
-| `strata_add_component` | `(<name> [LAYER <layer>])` | Register a component; creates the imported target `strata::<name>` whose include path is that layer's header directory |
+| `strata_add_project` | `(SCHEMA <dir> PRESETS <dir> [OUT <dir>])` | Declare where configuration items and presets live. Reads `STRATA_PRESET` from the cache |
+| `strata_add_component` | `(<name> <directory>)` | Declare one component. Creates the imported target `strata::<name>`, whose include path is that component's layer directory |
 | `strata_link_resolves` | `(<target> <component>...)` | Subscribe a target to the generated views |
 | `strata_get_feature` | `(<feature-id> <out-var>)` | Read a feature value for build decisions |
 | `strata_get_config` | `(<config-id> <out-var>)` | Read a raw configuration item (discouraged) |
 
 Notes:
 
-- `strata_add_project` is a **macro, not a function**: the generated `.cmake` is
-  included in the caller's scope, which is what makes `strata_get_feature` work
-  later in the same `CMakeLists.txt`. The other four are functions.
-- Order matters: project, then components, then targets. `strata_get_feature`
-  before `strata_add_project` is an error, not an empty value.
+- **The preset is not an argument.** It is a cache variable, set with
+  `-DSTRATA_PRESET=<name>` or by a CMake preset. Nothing in `CMakeLists.txt`
+  names a product, so switching products never edits the build file.
+- Generation is deferred until the first call that needs values, because
+  components are declared after `strata_add_project`. `strata_add_project` and
+  the three consumers are macros for that reason: the generated `.cmake` is
+  included in the caller's scope, so the values are visible where they are read.
+- Order matters: project, then components, then targets. Calling
+  `strata_get_feature` before a component is declared is an error, not an empty
+  value.
 - A change to any schema, preset or resolver file triggers a re-configure
   automatically (`CMAKE_CONFIGURE_DEPENDS`), so the values can never be stale.
 

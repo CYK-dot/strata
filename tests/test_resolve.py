@@ -15,7 +15,7 @@ from strata.errors import StrataError
 def _resolve(paths, preset_name: str = "p1"):
     loaded_schema = schema_engine.load(paths.schema)
     loaded_preset = preset_engine.load(paths.presets, preset_name, loaded_schema)
-    found = components_engine.discover(paths.components)
+    found = components_engine.load_all(paths.component_pairs)
     return resolve_engine.resolve_all(found, loaded_preset.values)
 
 

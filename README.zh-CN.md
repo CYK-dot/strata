@@ -49,6 +49,12 @@ your-project/
 
 ## 使用
 
+产品在配置时选，不写在构建文件里，因此同一份 `CMakeLists.txt` 能构建所有产品：
+
+```sh
+cmake -B build/plb -DSTRATA_PRESET=daplink_plb
+```
+
 在 `CMakeLists.txt` 靠上的位置启用一次：
 
 ```cmake
@@ -56,14 +62,12 @@ list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/strata/cmake)
 include(strata)
 
 strata_add_project(
-  SCHEMA     ${CMAKE_CURRENT_SOURCE_DIR}/configs/schema
-  PRESETS    ${CMAKE_CURRENT_SOURCE_DIR}/configs/presets
-  COMPONENTS ${CMAKE_CURRENT_SOURCE_DIR}/components
-  PRESET     ${STRATA_PRESET}          # 例如 -DSTRATA_PRESET=...
+  SCHEMA  ${CMAKE_CURRENT_SOURCE_DIR}/configs/schema
+  PRESETS ${CMAKE_CURRENT_SOURCE_DIR}/configs/presets
 )
 
-strata_add_component(ctl LAYER ctl)
-strata_add_component(bsp LAYER bsp)
+strata_add_component(ctl ${CMAKE_CURRENT_SOURCE_DIR}/components/ctl)
+strata_add_component(bsp ${CMAKE_CURRENT_SOURCE_DIR}/components/bsp)
 
 add_executable(firmware src/ctlp.c)
 strata_link_resolves(firmware ctl)
@@ -138,16 +142,17 @@ CMake Error at configs/presets/daplink_x.toml:2 (strata_add_project):
 
 | 接口 | 签名 | 作用 |
 | --- | --- | --- |
-| `strata_add_project` | `(SCHEMA <目录> PRESETS <目录> COMPONENTS <目录> PRESET <名称> [OUT <目录>])` | 配置期生成一次，并把 feature 值读进当前作用域 |
-| `strata_add_component` | `(<名称> [LAYER <层>])` | 登记组件，建立导入目标 `strata::<名称>`，其 include 路径指向该层的头文件目录 |
+| `strata_add_project` | `(SCHEMA <目录> PRESETS <目录> [OUT <目录>])` | 声明配置项与预设的位置；从缓存变量 `STRATA_PRESET` 读取产品 |
+| `strata_add_component` | `(<名称> <目录>)` | 声明一个组件，建立导入目标 `strata::<名称>`，其 include 路径指向该组件所在层的目录 |
 | `strata_link_resolves` | `(<目标> <组件>...)` | 让目标订阅生成结果 |
 | `strata_get_feature` | `(<feature-id> <输出变量>)` | 供构建逻辑读取 feature 值 |
 | `strata_get_config` | `(<config-id> <输出变量>)` | 读取原始配置项（不推荐） |
 
-三点要注意：
+四点要注意：
 
-- **`strata_add_project` 是 macro 而不是 function**。生成的 `.cmake` 必须在调用者的作用域里 `include`，否则 `STRATA_FEATURE_*` 只活在函数局部，后面的 `strata_get_feature` 根本看不见。其余四个是 function。
-- **顺序有意义**：先工程、再组件、最后目标。在 `strata_add_project` 之前调用 `strata_get_feature` 是报错，不是返回空值。
+- **预设不是参数。** 它是缓存变量，用 `-DSTRATA_PRESET=<名称>` 或 CMake preset 设定。`CMakeLists.txt` 里不出现任何产品名，切换产品不需要改构建文件。
+- **生成推迟到第一次真正需要取值时**，因为组件是在 `strata_add_project` 之后声明的。`strata_add_project` 与三个消费者都是 macro，就是为了这一点：生成的 `.cmake` 在调用者作用域里 `include`，值在读取它的地方可见。
+- **顺序有意义**：先工程、再组件、最后目标。在组件声明之前调用 `strata_get_feature` 是报错，不是返回空值。
 - **改动即重配**：声明、预设或 resolver 文件一变，CMake 自动重新配置（`CMAKE_CONFIGURE_DEPENDS`），值不会过期。
 
 ### 生成文件

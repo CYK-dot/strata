@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 CYK-Dot
 
-"""Command line entry point: ``python -m strata generate ...``."""
+"""Command line entry point. CMake calls this; users do not."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from .errors import StrataError
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="strata",
-        description="Separate the problem domain from the solution domain in configuration.",
+        description="Derive features from configuration items, for the build and for C/C++.",
     )
     parser.add_argument("--version", action="version", version=f"strata {__version__}")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -24,13 +24,32 @@ def build_parser() -> argparse.ArgumentParser:
     generate_parser = subparsers.add_parser(
         "generate", help="resolve features and write the CMake and C views"
     )
-    generate_parser.add_argument("--schema", required=True, help="directory of schema declarations")
+    generate_parser.add_argument("--schema", required=True, help="directory of configuration items")
     generate_parser.add_argument("--presets", required=True, help="directory of presets")
-    generate_parser.add_argument("--components", required=True, help="root of the components")
+    generate_parser.add_argument(
+        "--component",
+        action="append",
+        metavar="NAME=DIR",
+        required=True,
+        help="one declared component, repeatable",
+    )
     generate_parser.add_argument("--preset", required=True, help="preset name")
     generate_parser.add_argument("--out", required=True, help="output directory")
     generate_parser.add_argument("--quiet", action="store_true", help="do not print a summary")
     return parser
+
+
+def parse_components(specs: list[str]) -> list[tuple[str, str]]:
+    pairs: list[tuple[str, str]] = []
+    for spec in specs:
+        name, separator, directory = spec.partition("=")
+        if not separator or not name or not directory:
+            raise StrataError(
+                f'Invalid --component value "{spec}".',
+                hints=["Expected NAME=DIR, for example ctl=components/ctl."],
+            )
+        pairs.append((name, directory))
+    return pairs
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -39,7 +58,7 @@ def main(argv: list[str] | None = None) -> int:
         result = generate(
             schema_dir=args.schema,
             presets_dir=args.presets,
-            components_dir=args.components,
+            components=parse_components(args.component),
             preset_name=args.preset,
             out_dir=args.out,
         )

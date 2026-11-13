@@ -28,7 +28,10 @@ def test_demo_truth_table(preset_name, tmp_path):
     result = generate(
         schema_dir=DEMO_PROJECT / "configs" / "schema",
         presets_dir=DEMO_PROJECT / "configs" / "presets",
-        components_dir=DEMO_PROJECT / "components",
+        components=[
+            ("ctl", DEMO_PROJECT / "components" / "ctl"),
+            ("bsp", DEMO_PROJECT / "components" / "bsp"),
+        ],
         preset_name=preset_name,
         out_dir=tmp_path / preset_name,
     )
@@ -41,7 +44,10 @@ def test_short_circuit_shortens_the_trace(tmp_path):
     result = generate(
         schema_dir=DEMO_PROJECT / "configs" / "schema",
         presets_dir=DEMO_PROJECT / "configs" / "presets",
-        components_dir=DEMO_PROJECT / "components",
+        components=[
+            ("ctl", DEMO_PROJECT / "components" / "ctl"),
+            ("bsp", DEMO_PROJECT / "components" / "bsp"),
+        ],
         preset_name="daplink_plb",
         out_dir=tmp_path / "plb",
     )
@@ -54,7 +60,10 @@ def test_layers_are_separated_in_the_generated_headers(tmp_path):
     generate(
         schema_dir=DEMO_PROJECT / "configs" / "schema",
         presets_dir=DEMO_PROJECT / "configs" / "presets",
-        components_dir=DEMO_PROJECT / "components",
+        components=[
+            ("ctl", DEMO_PROJECT / "components" / "ctl"),
+            ("bsp", DEMO_PROJECT / "components" / "bsp"),
+        ],
         preset_name="daplink_ble",
         out_dir=tmp_path / "ble",
     )
