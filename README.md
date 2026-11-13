@@ -33,17 +33,6 @@ with more than one answer fits the same shape.
 It pays off when one codebase has to serve several configurations. It is not
 worth it for a single build with a single switch — a CMake `option()` is cheaper.
 
-## Table of Contents
-
-- [Install](#install)
-- [Usage](#usage)
-- [Concepts](#concepts)
-- [What strata is not](#what-strata-is-not)
-- [Diagnostics](#diagnostics)
-- [API](#api)
-- [Contributing](#contributing)
-- [License](#license)
-
 ## Install
 
 strata is not a package you install; it is a directory you vendor into the
