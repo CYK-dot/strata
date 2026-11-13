@@ -50,10 +50,6 @@ preset = "p1"
 a.count = 4
 """,
     "components/app/feature/strata_features.toml": """
-[meta]
-component = "app"
-layer     = "app"
-
 [[feature]]
 name = "app.DOUBLE"
 type = "int"

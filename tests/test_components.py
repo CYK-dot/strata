@@ -20,10 +20,6 @@ def test_declared_feature_without_resolver(project):
     paths = project(
         {
             "components/app/feature/strata_features.toml": """
-[meta]
-component = "app"
-layer     = "app"
-
 [[feature]]
 name = "app.DOUBLE"
 type = "int"
@@ -67,36 +63,10 @@ def extra(config):
     assert 'Feature "app.EXTRA" has a resolver but is not declared' in str(excinfo.value)
 
 
-def test_component_without_layer(project):
-    paths = project(
-        {
-            "components/app/feature/strata_features.toml": """
-[meta]
-component = "app"
-
-[[feature]]
-name = "app.DOUBLE"
-type = "int"
-
-[[feature]]
-name = "app.FLAG"
-type = "bool"
-"""
-        }
-    )
-    with pytest.raises(StrataError) as excinfo:
-        components_engine.load_all(paths.component_pairs)
-    assert "does not declare a layer" in str(excinfo.value)
-
-
 def test_duplicate_feature_across_components(project):
     paths = project(
         {
             "components/other/feature/strata_features.toml": """
-[meta]
-component = "other"
-layer     = "other"
-
 [[feature]]
 name = "app.FLAG"
 type = "bool"

@@ -22,7 +22,7 @@ def test_writes_all_views(project):
     paths = project()
     _generate(paths)
     assert (paths.out / "strata_features.cmake").is_file()
-    assert (paths.out / "app" / "strata_features.h").is_file()
+    assert (paths.out / "strata_features.h").is_file()
     assert (paths.out / "config" / "strata_config.h").is_file()
     assert (paths.out / "config" / "strata_config.cmake").is_file()
     assert (paths.out / "strata_manifest.json").is_file()
@@ -39,10 +39,10 @@ def test_cmake_view_uses_the_documented_prefixes(project):
     assert "set(STRATA_CONFIG_a.on OFF)" in config
 
 
-def test_layer_header_only_carries_its_layer(project):
+def test_header_carries_features_only(project):
     paths = project()
     _generate(paths)
-    header = (paths.out / "app" / "strata_features.h").read_text(encoding="utf-8")
+    header = (paths.out / "strata_features.h").read_text(encoding="utf-8")
     assert "#define STRATA_FEATURE_APP_DOUBLE 8" in header
     assert "STRATA_CONFIG_" not in header
 

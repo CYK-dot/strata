@@ -56,20 +56,15 @@ def test_short_circuit_shortens_the_trace(tmp_path):
     assert "board.has_uart_ble_adapter" not in reads
 
 
-def test_layers_are_separated_in_the_generated_headers(tmp_path):
+def test_all_features_share_one_header(tmp_path):
     generate(
         schema_dir=DEMO_PROJECT / "configs" / "schema",
         presets_dir=DEMO_PROJECT / "configs" / "presets",
-        components=[
-            ("ctl", DEMO_PROJECT / "components" / "ctl"),
-            ("bsp", DEMO_PROJECT / "components" / "bsp"),
-        ],
+        components=[("ctl", DEMO_PROJECT / "components" / "ctl"),
+                    ("bsp", DEMO_PROJECT / "components" / "bsp")],
         preset_name="daplink_ble",
         out_dir=tmp_path / "ble",
     )
-    ctl = (tmp_path / "ble" / "ctl" / "strata_features.h").read_text(encoding="utf-8")
-    bsp = (tmp_path / "ble" / "bsp" / "strata_features.h").read_text(encoding="utf-8")
-    assert "STRATA_FEATURE_CTL_SUPPORT_WIRELESS_TUNNEL" in ctl
-    assert "TUNNEL_BACKEND" not in ctl
-    assert "STRATA_FEATURE_BSP_TUNNEL_BACKEND" in bsp
-    assert "SUPPORT_WIRELESS_TUNNEL" not in bsp
+    header = (tmp_path / "ble" / "strata_features.h").read_text(encoding="utf-8")
+    assert "STRATA_FEATURE_CTL_SUPPORT_WIRELESS_TUNNEL" in header
+    assert "STRATA_FEATURE_BSP_TUNNEL_BACKEND" in header

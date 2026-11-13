@@ -5,7 +5,7 @@
 #
 #   strata_add_project(SCHEMA <dir> PRESETS <dir> [OUT <dir>])
 #   strata_add_component(<name> <directory>)
-#   strata_link_resolves(<target> <component>...)
+#   strata_link_resolves(<target>)
 #   strata_get_feature(<id> <out-var>)
 #   strata_get_config(<id> <out-var>)
 #
@@ -63,8 +63,8 @@ endfunction()
 
 
 # Generation is deferred until something needs the values, because components are
-# declared after strata_add_project(). Every consumer includes the generated files
-# in its own scope, so the values are visible wherever they are read.
+# declared after strata_add_project(). _strata_ensure is a macro so the generated
+# .cmake lands in the caller's scope, where the values are then read.
 macro(_strata_ensure)
   if(NOT STRATA_GENERATED)
     if(NOT STRATA_SCHEMA_DIR)
@@ -97,7 +97,6 @@ macro(_strata_ensure)
       message(FATAL_ERROR "strata: generation failed (see the messages above).")
     endif()
 
-    _strata_declare_targets("${_strata_specs}")
     _strata_watch_inputs("${_strata_specs}")
     set(STRATA_GENERATED TRUE CACHE INTERNAL "strata: generation done")
   endif()
@@ -105,19 +104,6 @@ macro(_strata_ensure)
   include("${STRATA_OUT_DIR}/strata_features.cmake")
   include("${STRATA_OUT_DIR}/config/strata_config.cmake")
 endmacro()
-
-
-function(_strata_declare_targets specs)
-  file(READ "${STRATA_OUT_DIR}/strata_manifest.json" _manifest)
-  foreach(spec IN LISTS specs)
-    string(FIND "${spec}" "=" _eq)
-    string(SUBSTRING "${spec}" 0 ${_eq} _name)
-    string(JSON _layer GET "${_manifest}" components "${_name}" layer)
-    add_library(strata::${_name} INTERFACE IMPORTED)
-    set_target_properties(strata::${_name} PROPERTIES
-      INTERFACE_INCLUDE_DIRECTORIES "${STRATA_OUT_DIR}/${_layer}")
-  endforeach()
-endfunction()
 
 
 function(_strata_watch_inputs specs)
@@ -133,16 +119,11 @@ function(_strata_watch_inputs specs)
 endfunction()
 
 
+# Features are global: every target that subscribes sees all of them.
 macro(strata_link_resolves target)
-  set(_strata_wanted ${ARGN})
+  set(_strata_subscriber ${target})
   _strata_ensure()
-  foreach(_strata_component IN LISTS _strata_wanted)
-    if(NOT TARGET strata::${_strata_component})
-      message(FATAL_ERROR
-              "strata_link_resolves: unknown component \"${_strata_component}\"")
-    endif()
-    target_link_libraries(${target} PRIVATE strata::${_strata_component})
-  endforeach()
+  target_include_directories(${_strata_subscriber} PRIVATE "${STRATA_OUT_DIR}")
 endmacro()
 
 

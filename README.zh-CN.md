@@ -14,7 +14,7 @@ feature 描述的是软件能做什么——`ctl.SUPPORT_WIRELESS_TUNNEL`。后�
 
 **理念：配置项之上的一切都不该直接读它们，该读推导出来的东西。**
 
-strata 把这条推导做成独立的一层。每个组件声明它对外暴露的 feature，并为每一个写出从配置项推导它的函数。strata 把这些声明求值一次，产出两份东西：一份 CMake 文件，以及每一层一个 C 头文件。新增一颗芯片、一个档位或一个区域，就是一次新的推导，而不是去改那些本不该关心取值来源的代码。
+strata 把这条推导做成独立的一层。每个组件声明它对外暴露的 feature，并为每一个写出从配置项推导它的函数。strata 把这些声明求值一次，产出两份东西：一份 CMake 文件，以及一个 C 头文件。新增一颗芯片、一个档位或一个区域，就是一次新的推导，而不是去改那些本不该关心取值来源的代码。
 
 硬件是最常见的第一个场景——几颗不同的芯片可以提供同一项能力——但 strata 里没有任何东西是硬件专属的。任何有多个答案的配置，都适用同一套形状。
 
@@ -61,13 +61,12 @@ strata_add_component(bsp ${CMAKE_CURRENT_SOURCE_DIR}/components/bsp)
 
 # 由构建决定编哪一套 BSP 实现
 strata_get_feature("bsp.TUNNEL_BACKEND" backend)
-add_library(tunnel_bsp STATIC bsp/tunnel_${backend}.c)
-strata_link_resolves(tunnel_bsp bsp)
 
-# 控制面只订阅自己那一层，另外链上抽象接口
-add_executable(firmware src/ctlp.c)
-strata_link_resolves(firmware ctl)
-target_link_libraries(firmware PRIVATE tunnel_bsp)
+add_executable(firmware
+  src/ctlp.c
+  bsp/tunnel_${backend}.c
+)
+strata_link_resolves(firmware)   # 订阅后，全部 feature 对这个目标可见
 ```
 
 `backend` 的取值是 `ble` / `plb` / `uart_ble` / `none`，这里用来决定编哪个 BSP 文件。这个决定属于构建，不属于 strata——strata 只保证取到的值是对的。
@@ -99,12 +98,11 @@ int main(void)
 | **配置声明（schema）** | 配置项的全局词汇表：id、类型、取值范围、默认值与说明 | 组件只读不写；id 全局唯一 |
 | **配置项（item）** | 声明出来的一条值，如 `chip.pioc`、`board.uart_count`、`tier.pro` | 有类型：`bool` / `int` / `float` / `string`。它的含义属于拥有它的那个领域 |
 | **预设（preset）** | 一份完整的配置项取值：一款产品、一次部署、一个客户 | 没写到的项取声明的默认值 |
-| **组件（component）** | 一个目录：`strata_features.toml` 是契约，`strata_features.py` 是求解函数 | 拥有自己的 feature，并声明一个 `layer` |
-| **feature** | 由配置项推导出的、带名字带类型的值，构建与代码都能读，如 `ctl.SUPPORT_WIRELESS_TUNNEL` | 这是**软件的词汇**，不是配置的词汇。全局唯一；只依赖配置项，**绝不依赖别的 feature** |
+| **组件（component）** | 一个目录：`strata_features.toml` 是契约，`strata_features.py` 是求解函数 | 拥有自己的 feature；`strata_add_component` 给它的名字就是清单里的归属标签 |
+| **feature** | 由配置项推导出的、带名字带类型的值，构建与代码都能读，如 `ctl.SUPPORT_WIRELESS_TUNNEL` | 这是**软件的词汇**，不是配置的词汇。全局唯一，任何订阅了它的目标都看得见；只由配置项推导，**绝不从别的 feature 推导** |
 | **resolver** | 算出一个 feature 的函数：`@feature("...")` 加上 `(config) -> value` | 一个 feature、一个函数、一个归属人 |
 | **config 对象** | 传给 resolver 的配置视图（`config.chip.pioc`） | 每次读取都被记录——溯源就是从这里来的 |
-| **层（layer）** | feature 的可见性边界 | 生成到该层自己的头文件里；跨层可行，但工具不把别层的宏递给你 |
-| **视图（views）** | 生成物：一份 CMake 视图，每层一份 C 头文件 | 同一次运行产出，因此不可能不一致 |
+| **视图（views）** | 生成物：一份 CMake 文件，一个 C 头文件 | 同一次运行产出，因此不可能不一致 |
 | **清单（manifest）** | `strata_manifest.json`：值、归属、实际读到的配置项（`by`）、输入哈希 | 「为什么是开着的」的答案 |
 | **逃生舱** | 全部配置项的导出，前缀 `STRATA_CONFIG_*` | 刻意提供、刻意不推荐：读了它就重新绑回原始词汇 |
 
@@ -113,10 +111,10 @@ int main(void)
 | 它不是 | 因为 |
 | --- | --- |
 | 配置管理器 | 它不负责值从哪来、怎么存、怎么分发 |
-| Kconfig 的替代品 | Kconfig 的符号共用一个平坦命名空间，表达不了「哪一层拥有它」，而这正是 strata 的全部意义 |
+| Kconfig 的替代品 | Kconfig 不说明符号对软件意味着什么，也不从别的符号推导符号；strata 的主题是这条推导，不是值的存放 |
 | 构建系统 | 它不编译任何东西，只产出 CMake 消费的输入 |
 | 运行时开关服务 | 它只覆盖构建期与编译期的决策，不涉及设备运行时的行为 |
-| 强制机制 | 它提供分层这条路，并让另一条路可见；它不拦人 |
+| 强制机制 | 它让人看见谁读了配置项而不是 feature；它不拦人 |
 | 硬件工具 | 硬件只是最常见的第一个场景，不是主题。任何有多个答案的配置，都适用同一套形状 |
 
 ## 诊断
@@ -139,7 +137,7 @@ CMake Error at configs/presets/daplink_x.toml:2 (strata_add_project):
 | 接口 | 签名 | 作用 |
 | --- | --- | --- |
 | `strata_add_project` | `(SCHEMA <目录> PRESETS <目录> [OUT <目录>])` | 声明配置项与预设的位置；从缓存变量 `STRATA_PRESET` 读取产品 |
-| `strata_add_component` | `(<名称> <目录>)` | 声明一个组件，建立导入目标 `strata::<名称>`，其 include 路径指向该组件所在层的目录 |
+| `strata_add_component` | `(<名称> <目录>)` | 声明一个组件：契约与求解函数在哪，以及清单里用的归属标签 |
 | `strata_link_resolves` | `(<目标> <组件>...)` | 让目标订阅生成结果 |
 | `strata_get_feature` | `(<feature-id> <输出变量>)` | 供构建逻辑读取 feature 值 |
 | `strata_get_config` | `(<config-id> <输出变量>)` | 读取原始配置项（不推荐） |
@@ -156,13 +154,13 @@ CMake Error at configs/presets/daplink_x.toml:2 (strata_add_project):
 ```
 build/generated/
 ├── strata_features.cmake     set(STRATA_FEATURE_<id> <值>)，覆盖全部 feature
-├── <层>/strata_features.h    #define STRATA_FEATURE_<层>_<名> <值>
+├── strata_features.h         #define STRATA_FEATURE_<ID> <值>
 ├── config/strata_config.h    #define STRATA_CONFIG_<ID> <值>
 ├── config/strata_config.cmake
 └── strata_manifest.json      值、溯源、输入哈希
 ```
 
-各层用同一个头文件名，所以 `strata_features.h` 到底解析到哪一份，由 include 路径决定：订阅了 `ctl` 的目标叫不出 `bsp` 的 feature，因为那份头文件不在它的路径上。
+所有 feature 都在同一个头文件里。调用过 `strata_link_resolves` 的目标拿得到它，没调用过的拿不到。
 
 命名规则：`ctl.MAX_TUNNEL_SESSIONS` 在 C 侧是 `STRATA_FEATURE_CTL_MAX_TUNNEL_SESSIONS`，在 CMake 侧是 `STRATA_FEATURE_ctl.MAX_TUNNEL_SESSIONS`；配置项 `chip.pioc` 是 `STRATA_CONFIG_CHIP_PIOC`。两队前缀不交叉，光看前缀就知道手里拿的是**配置项**还是**feature**。
 

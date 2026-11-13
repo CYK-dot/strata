@@ -38,7 +38,6 @@ class Declaration:
     file: Path
     line: int | None
     component: str
-    layer: str
     doc: str | None = None
 
     @property
@@ -53,7 +52,6 @@ class Declaration:
 @dataclass
 class Component:
     id: str
-    layer: str
     root: Path
     decl_file: Path
     resolver_file: Path
@@ -110,15 +108,6 @@ def _load_component(name: str, root: Path) -> Component:
 
 def _parse_component(name: str, root: Path, decl_file: Path, resolver_file: Path) -> Component:
     data = read_toml(decl_file)
-    meta = data.get("meta", {}) or {}
-    layer = meta.get("layer")
-    if not isinstance(layer, str) or not layer:
-        raise StrataError(
-            "Component does not declare a layer.",
-            file=decl_file,
-            line=line_of(decl_file, "[meta]"),
-            hints=['Add a [meta] table with layer = "ctl" (or whatever yours is called).'],
-        )
 
     parsed: list[Declaration] = []
     for table in data.get("feature", []) or []:
@@ -144,14 +133,12 @@ def _parse_component(name: str, root: Path, decl_file: Path, resolver_file: Path
                 file=decl_file,
                 line=line_of(decl_file, feature_name),
                 component=name,
-                layer=layer,
                 doc=table.get("doc"),
             )
         )
 
     return Component(
         id=name,
-        layer=layer,
         root=root,
         decl_file=decl_file,
         resolver_file=resolver_file,
