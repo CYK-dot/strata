@@ -86,12 +86,20 @@ strata_add_project(
 strata_add_component(ctl ${CMAKE_CURRENT_SOURCE_DIR}/components/ctl)
 strata_add_component(bsp ${CMAKE_CURRENT_SOURCE_DIR}/components/bsp)
 
+# The build picks which BSP implementation goes in.
+strata_get_feature("bsp.TUNNEL_BACKEND" backend)
+add_library(tunnel_bsp STATIC bsp/tunnel_${backend}.c)
+strata_link_resolves(tunnel_bsp bsp)
+
+# The control plane sees only its own layer, plus the abstract interface.
 add_executable(firmware src/ctlp.c)
 strata_link_resolves(firmware ctl)
-
-strata_get_feature("bsp.TUNNEL_BACKEND" backend)
-target_sources(firmware PRIVATE bsp/tunnel_${backend}.c)
+target_link_libraries(firmware PRIVATE tunnel_bsp)
 ```
+
+`backend` is `ble`, `plb`, `uart_ble` or `none`; here it decides which BSP file
+is compiled. That decision belongs to the build, not to strata — strata only
+guarantees the value is the right one.
 
 Then the code includes one header and reads the features:
 

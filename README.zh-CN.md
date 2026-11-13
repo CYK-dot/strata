@@ -70,12 +70,18 @@ strata_add_project(
 strata_add_component(ctl ${CMAKE_CURRENT_SOURCE_DIR}/components/ctl)
 strata_add_component(bsp ${CMAKE_CURRENT_SOURCE_DIR}/components/bsp)
 
+# 由构建决定编哪一套 BSP 实现
+strata_get_feature("bsp.TUNNEL_BACKEND" backend)
+add_library(tunnel_bsp STATIC bsp/tunnel_${backend}.c)
+strata_link_resolves(tunnel_bsp bsp)
+
+# 控制面只订阅自己那一层，另外链上抽象接口
 add_executable(firmware src/ctlp.c)
 strata_link_resolves(firmware ctl)
-
-strata_get_feature("bsp.TUNNEL_BACKEND" backend)
-target_sources(firmware PRIVATE bsp/tunnel_${backend}.c)
+target_link_libraries(firmware PRIVATE tunnel_bsp)
 ```
+
+`backend` 的取值是 `ble` / `plb` / `uart_ble` / `none`，这里用来决定编哪个 BSP 文件。这个决定属于构建，不属于 strata——strata 只保证取到的值是对的。
 
 然后代码里 include 一个头文件、读 feature：
 
