@@ -1,0 +1,6 @@
+# Keep the license text byte exact and the prose out of CRLF churn.
+LICENSE -text
+*.md text eol=lf
+*.py text eol=lf
+*.cmake text eol=lf
+*.toml text eol=lf
