@@ -2,24 +2,34 @@
 
 Turns configuration items into named features that CMake and C/C++ code read.
 
-Configuration arrives in the vocabulary of whoever owns it: chip part numbers,
-board revisions, customer tiers, region codes, capability flags. Code that reads
-those raw items is coupled to decisions it did not make and cannot review, and
-when the configuration changes shape, the code changes with it — usually in
-places that had no business knowing where the value came from.
+Configuration items pile up quickly: chip model, board revision, customer tier,
+region, optional hardware, build profile. The build and the code have to turn
+those items into decisions, and the usual way is to read them directly — `#ifdef`
+in the sources, `if()` in CMake.
 
-strata puts a layer between the two. Configuration items are declared once, in
-one global vocabulary. Each component declares the features it exposes and the
-functions that derive them from those items, so a feature is a name the software
-can reason about rather than a raw setting it has to interpret.
+That works while there are two items. As they grow:
 
-The build system and the C/C++ code read features and never the items directly.
-Introducing a new chip, a new customer tier or a new region is then a new
-derivation, not an edit to code that should not care about the origin of a value.
+- the predicates grow with the items and with their combinations, and the same
+  decision is copied into every place that needs it;
+- the code speaks the configuration's vocabulary, so a new chip or a new customer
+  tier means editing code that had no business knowing those words;
+- the build and the sources decide independently, and nothing keeps them in step;
+- nobody can answer "why is this enabled in this build?" without reading both.
+
+**The idea.** Nothing above the configuration should read the items. Derive what
+it needs instead.
+
+strata makes that derivation a layer of its own. Each component declares the
+features it exposes — named, typed values in the software's own vocabulary — and
+writes the function that derives each one from the configuration items. strata
+evaluates the declarations once and emits the result as a CMake file and as one C
+header per layer. The build and the code read features, never items: adding a
+chip, a tier or a region becomes a new derivation instead of an edit to code that
+should not care.
 
 Hardware is the usual first case — several different chips can provide the same
 capability — but nothing in strata is specific to hardware. Any configuration
-that has more than one answer is a candidate.
+with more than one answer fits the same shape.
 
 It pays off when one codebase has to serve several configurations. It is not
 worth it for a single build with a single switch — a CMake `option()` is cheaper.
