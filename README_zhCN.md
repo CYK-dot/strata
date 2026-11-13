@@ -1,32 +1,61 @@
 # strata
 
-**在配置上把问题域与解域分开。**
+> **strata 把「目标是什么」推导成「软件提供什么」，并把这条推导保存为唯一一份可评审的产物。**
 
-strata 把「这块板子上焊了蓝牙模组」这类**问题域事实**，转换成「本次构建提供无线隧道」这类**解域能力**，并把两者之间的对应关系留在唯一一份可评审的文件里。CMake 与 C/C++ 读到的是同一次推导的结果，构建系统与源码不可能对「这台设备支持什么」各执一词。
+这句话压着三个主张，每个都带一个设计后果。
+
+**一、「目标是什么」是一个独立的模型。**
+硬件是什么——哪颗芯片、哪块板、哪个产品档位——被写成数据：有名字、有类型、有取值范围、有默认值。它由懂硬件的人拥有，按硬件的节奏变化，并且不描述软件。
+
+**二、「推导」是一份产物，不是一种习惯。**
+两侧的对应关系——「有 PIOC 或 PLB 就够软卸载 JTAG」——只写一次、只放一处，因而可评审、可解释、可测试。今天它躺在预处理表达式里：没有名字，被复制多份，从未被验证过。
+
+**三、结果被两个消费者共享。**
+推导产出带类型的 **feature**。构建系统读它决定编什么、链什么；C/C++ 读它决定开什么。两边读的是同一次运行的同一份值，所以构建期裁剪与编译期分支不可能各说各话。
+
+本文其余部分，都是这三条的推论。
+
+---
+
+## 这个定义改变了什么
 
 ```c
-/* 之前：控制面在读它本不该知道的硬件事实 */
+/* 之前：控制面在读它本不该知道的硬件事实。
+ * 三个事实、一项能力，决策发生在错误的层。 */
 #if defined(MCU_HAS_PIOC) || defined(BOARD_HAS_BLE_MODULE) || defined(BOARD_HAS_AT_ADAPTER)
     tunnel_start(2);
 #endif
 
-/* 之后：控制面读一项能力 */
+/* 之后：同一个控制面读的是一项能力。
+ * 由什么硬件提供隧道，已经被封在抽象之下。 */
 #if STRATA_FEATURE_CTL_SUPPORT_WIRELESS_TUNNEL
     tunnel_start(STRATA_FEATURE_CTL_MAX_TUNNEL_SESSIONS);
 #endif
 ```
 
-隧道底下走的是蓝牙、片上可编程逻辑还是 UART 适配器，被封在抽象之下——BSP 实现同一个接口，上层不必知道。
+第二版不会以同样的方式腐烂：多一条硬件路径，是映射文件里的一行，而不是控制面代码的一次改动。变的不是语法，是**知识住在哪里**。
+
+---
+
+## 它不是什么
+
+| 它不是 | 因为 |
+| --- | --- |
+| 配置管理器 | 它不负责值从哪来、怎么存、怎么分发 |
+| Kconfig 的替代品 | Kconfig 的符号共用一个平坦命名空间，表达不了「哪一层拥有它」，而这正是 strata 的全部意义 |
+| 构建系统 | 它不编译任何东西，只产出 CMake 消费的输入 |
+| 运行时开关服务 | 它只覆盖构建期与编译期的决策，不涉及设备运行时的行为 |
+| 强制机制 | 它提供分层这条路，并让另一条路可见；它不拦人 |
 
 ---
 
 ## 什么时候需要它
 
 - **一套源码、多款产品**，差别在于某项能力**由谁提供**，而不在于软件要不要提供它。
-- **`#if` 里混着几个硬件事实**（`BOARD_HAS_BLE || MCU_HAS_PIOC`），每加一颗芯片就要再改一遍。
-- **构建逻辑与源码各走各的**：CMake 用一套开关挑源文件，C 代码用另一套宏分支，靠人同步。
+- **`#if` 里混着几个硬件事实**（`BOARD_HAS_BLE || MCU_HAS_PIOC`），每加一个目标就要再改一遍。
+- **构建逻辑与源码各走各的**：CMake 用一套开关挑源文件，C 代码用另一套宏分支。
 - **没人答得上来「这次构建为什么有这个功能」**，除非去翻代码和芯片手册。
-- **映射本身值得评审**：「有 PIOC 或 PLB 就够软卸载 JTAG」是一条硬件结论，今天它躺在预处理表达式里，没有名字，也没有被验证过。
+- **映射本身值得评审**：硬件结论值得写下来一次、给它一个名字，而不是抄到每一个使用点。
 
 ## 什么时候不需要它
 
@@ -38,39 +67,21 @@ strata 把「这块板子上焊了蓝牙模组」这类**问题域事实**，转
 
 ## 概念
 
-strata 的词汇是刻意做小的。下面这些词会出现在它的文件、产物和报错里。
+词汇是刻意做小的。下面这些词会出现在 strata 的文件、产物和报错里。
 
-**问题域 / 声明（schema）**：目标是**什么**——芯片、板卡、产品档位的事实与数值。声明文件里定义**维度**：id、类型（`bool` / `int` / `float` / `string`）、可选取值范围、可选默认值、一行说明。声明是全局的：组件只读，不得扩展。
-
-**预设（preset）**：一份完整的取值——哪颗芯片、哪块板、哪个档位。一个预设文件就是一款产品；没写的维度取声明的默认值。
-
-**config 对象**：resolver 拿到的东西，`config.chip.pioc` 或 `config["board.has_ble_module"]`。它同时是探针：每次读取都被记录，于是 strata 事后能说出「是哪几条事实让它成立」。
-
-**组件（component）**：一个目录，里面 `strata_features.toml` 是契约（有哪些 feature、什么类型、什么说明），`strata_features.py` 是求解函数。组件拥有自己的 feature，并声明一个 `layer`。
-
-**feature**：构建系统与源码都能读到的带类型值，例如 `ctl.SUPPORT_WIRELESS_TUNNEL`。名字全局唯一。feature **只从问题域值推导，绝不引用别的 feature**——这让求值顺序无关紧要，环也不可能出现。
-
-**resolver（求解函数）**：算出一个 feature 的那个函数。
-
-```python
-@feature("ctl.SUPPORT_WIRELESS_TUNNEL")
-def support_wireless_tunnel(config):
-    return config.product.wireless_debug and (
-        config.board.has_ble_module
-        or config.chip.pioc
-        or config.board.has_uart_ble_adapter
-    )
-```
-
-一个 feature，一个 resolver，一个归属人。
-
-**层（layer）**：可见性的边界。feature 按层生成到各自的头文件里，因此只链接了 `ctl` 层的控制面目标，连 `bsp.TUNNEL_BACKEND` 这个名字都拿不到。strata 不禁止跨层，只是**不把别层的宏递给你**。
-
-**视图（view）**：生成物——一份 CMake 视图（`strata_features.cmake`）与按层的 C 视图（`<layer>/strata_features.h`）。同一次运行产出，因此不可能不一致。
-
-**清单（manifest）**：`strata_manifest.json`，记录每个 feature 的值、归属组件、**实际读到**的问题域变量（`by`），以及全部输入的哈希。它就是「为什么是开着的」的答案。
-
-**逃生舱**：每个问题域值同时导出为 `STRATA_CONFIG_*`，供那些找不到诚实 feature 名的场合使用（主频、Flash 容量）。**它被刻意提供，也被刻意不推荐**：读它等于把代码重新焊回硬件。生成物顶部会写明，除此以外只有评审能拦你。
+| 术语 | 定义 | 要点 |
+| --- | --- | --- |
+| **问题域声明（schema）** | 目标的全局词汇表：维度的 id、类型、取值范围、默认值与说明 | 组件只读不写；维度 id 全局唯一 |
+| **维度（dimension）** | 词汇表里的一条事实或参数，如 `chip.pioc`、`board.uart_count` | 有类型：`bool` / `int` / `float` / `string` |
+| **预设（preset）** | 一份完整的维度取值，代表一款产品 | 没写的维度取声明的默认值 |
+| **组件（component）** | 一个目录：`strata_features.toml` 是契约，`strata_features.py` 是求解函数 | 拥有自己的 feature，并声明一个 `layer` |
+| **feature** | 由问题域推导出的带类型值，构建与代码都能读，如 `ctl.SUPPORT_WIRELESS_TUNNEL` | 全局唯一；只依赖问题域值，**绝不依赖别的 feature** |
+| **resolver** | 算出一个 feature 的函数：`@feature("...")` 加上 `(config) -> value` | 一个 feature、一个函数、一个归属人 |
+| **config 对象** | 传给 resolver 的问题域视图（`config.chip.pioc`） | 每次读取都被记录——溯源就是从这里来的 |
+| **层（layer）** | feature 的可见性边界 | 生成到该层自己的头文件里；跨层可行，但工具不把别层的宏递给你 |
+| **视图（views）** | 生成物：一份 CMake 视图，每层一份 C 头文件 | 同一次运行产出，因此不可能不一致 |
+| **清单（manifest）** | `strata_manifest.json`：值、归属、实际读到的变量（`by`）、输入哈希 | 「为什么是开着的」的答案 |
+| **逃生舱** | 全部问题域值的导出，前缀 `STRATA_CONFIG_*` | 刻意提供、刻意不推荐：读了它就重新焊回硬件 |
 
 ---
 
@@ -140,7 +151,7 @@ endif()
 | 接口 | 签名 | 作用 |
 | --- | --- | --- |
 | `strata_add_project` | `(SCHEMA <目录> PRESETS <目录> COMPONENTS <目录> PRESET <名称> [OUT <目录>])` | 配置期生成一次，并把 feature 值读进当前作用域 |
-| `strata_add_component` | `(<名称> [LAYER <层>] [DIR <目录>])` | 登记组件，建立导入目标 `strata::<名称>`，其 include 路径指向该层的头文件目录 |
+| `strata_add_component` | `(<名称> [LAYER <层>])` | 登记组件，建立导入目标 `strata::<名称>`，其 include 路径指向该层的头文件目录 |
 | `strata_link_resolves` | `(<目标> <组件>...)` | 让目标订阅生成结果 |
 | `strata_get_feature` | `(<feature-id> <输出变量>)` | 供构建逻辑读取 feature 值 |
 | `strata_get_config` | `(<config-id> <输出变量>)` | 读取问题域原始值（不推荐） |

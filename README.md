@@ -1,26 +1,64 @@
 # strata
 
-**Separate the problem domain from the solution domain in configuration.**
+> **strata derives the software's features from a description of the target, and
+> keeps that derivation as one explicit, reviewable artifact.**
 
-strata turns statements like *"this board has a BLE module"* into capabilities
-like *"this build provides a wireless tunnel"*, and keeps the correspondence in
-one reviewable file. CMake and the C/C++ code read the same derived values, so
-the build and the sources cannot disagree about what a product supports.
+Read that sentence again: three claims are packed into it, and each one carries a
+design consequence.
+
+**1. "a description of the target" is a model of its own.**
+What the hardware *is* — which chip, which board, which product tier — is
+written down as data: named values with types, ranges and defaults. It is owned
+by the people who know the hardware, changed at the rate the hardware changes,
+and it says nothing about software.
+
+**2. "the derivation" is an artifact, not a habit.**
+The correspondence between the two sides — *"PIOC or PLB is enough to offload
+JTAG"* — is written once, in one place, where it can be reviewed, explained and
+tested. Today it lives inside preprocessor expressions: unnamed, duplicated,
+never verified.
+
+**3. The result is shared by two consumers.**
+Derivation produces typed **features**. The build system reads them to decide
+what to compile and link; the C/C++ code reads them to decide what to enable.
+Both read the *same* values from the *same* run, so build-time pruning and
+compile-time branching cannot drift apart.
+
+Everything else in this document is consequence.
+
+---
+
+## What the definition changes
 
 ```c
-/* before: a control plane reading hardware facts it should not know */
+/* Before: a control plane reading hardware facts it should not know.
+ * Three facts, one capability, decided at the wrong layer. */
 #if defined(MCU_HAS_PIOC) || defined(BOARD_HAS_BLE_MODULE) || defined(BOARD_HAS_AT_ADAPTER)
     tunnel_start(2);
 #endif
 
-/* after: a control plane reading a capability */
+/* After: the same control plane reading a capability.
+ * Which hardware provides the tunnel is below the abstraction now. */
 #if STRATA_FEATURE_CTL_SUPPORT_WIRELESS_TUNNEL
     tunnel_start(STRATA_FEATURE_CTL_MAX_TUNNEL_SESSIONS);
 #endif
 ```
 
-Whether the tunnel runs over BLE, over programmable logic, or over a UART
-adapter stays below the abstraction, where the BSP implements one interface.
+The second version cannot rot in the same way: adding a fourth hardware path is
+a line in a mapping file, not an edit to control-plane code. What changed is not
+the syntax but **where the knowledge lives**.
+
+---
+
+## What strata is not
+
+| It is not | Because |
+| --- | --- |
+| A configuration manager | It does not own where values come from, how they are stored, or how they are distributed |
+| A Kconfig replacement | Kconfig's symbols share one flat namespace and cannot express which layer owns them; strata's whole point is that boundary |
+| A build system | It compiles nothing; it produces input that CMake consumes |
+| A runtime switch service | It covers build-time and compile-time decisions only, never what a running device does |
+| An enforcement mechanism | It provides the layered path and makes the other path visible; it does not block it |
 
 ---
 
@@ -30,13 +68,12 @@ adapter stays below the abstraction, where the BSP implements one interface.
   provided, not in *whether* the software offers it.
 - **`#if` predicates that mix several hardware facts** (`BOARD_HAS_BLE ||
   MCU_HAS_PIOC`). Every new target edits them again.
-- **Build logic and source code drift apart**: CMake picks the sources from one
-  set of switches, the C code branches on another.
+- **Build logic and source code drift apart**: CMake picks sources from one set
+  of switches, the C code branches on another.
 - **Nobody can answer "why does this build have this feature?"** without reading
   code and datasheets.
-- **The mapping itself deserves review**: "PIOC or PLB is enough for JTAG
-  offload" is hardware knowledge that today lives inside a preprocessor
-  expression, unnamed and untested.
+- **The mapping itself deserves review**: hardware conclusions are worth writing
+  down once, with a name, instead of being copied into every use site.
 
 ## When you probably don't
 
@@ -44,69 +81,28 @@ adapter stays below the abstraction, where the BSP implements one interface.
 - Driver internals. There strata only buys you solved, validated combinations of
   macros; the real payoff is at the layers that promise to be hardware
   agnostic — control plane, protocol stacks, application logic.
-- A single build with no variants: the mapping has nothing to map.
+- A single build with no variants: there is nothing to map.
 
 ---
 
 ## Concepts
 
-strata deliberately has a small vocabulary. These are the words used in its
-files, its output and its errors.
+The vocabulary is deliberately small. These are the words that appear in strata's
+files, output and errors.
 
-**Problem domain / schema.** What the target *is*: facts and numbers about the
-chip, the board, the product tier. A schema file declares *dimensions*: an id, a
-type (`bool`, `int`, `float`, `string`), an optional range, an optional default,
-a doc line. The schema is global — components read it, they never extend it.
-
-**Preset.** One complete assignment of those dimensions: "which chip, which
-board, which product tier". A preset file is one product. Values not given fall
-back to the schema default.
-
-**Config object.** What a resolver receives. `config.chip.pioc`, or
-`config["board.has_ble_module"]`. It is also a probe: every read is recorded, so
-strata can later say which facts made a feature true.
-
-**Component.** A directory holding `strata_features.toml` (the contract: which
-features exist, their types, their docs) next to `strata_features.py` (the
-resolvers). A component owns its features and declares one `layer`.
-
-**Feature.** A typed value that both the build system and the code may read:
-`ctl.SUPPORT_WIRELESS_TUNNEL`. Feature names are globally unique. A feature is
-derived only from problem-domain values — **never from another feature**, which
-keeps evaluation order irrelevant and makes cycles impossible.
-
-**Resolver.** The function that computes one feature:
-
-```python
-@feature("ctl.SUPPORT_WIRELESS_TUNNEL")
-def support_wireless_tunnel(config):
-    return config.product.wireless_debug and (
-        config.board.has_ble_module
-        or config.chip.pioc
-        or config.board.has_uart_ble_adapter
-    )
-```
-
-One feature, one resolver, one owner.
-
-**Layer.** A visibility boundary. Features are emitted per layer into that
-layer's own header, so a control-plane target linking only the `ctl` layer cannot
-even name `bsp.TUNNEL_BACKEND`. strata does not forbid crossing layers; it just
-does not hand you the other layer's macros.
-
-**Views.** The generated artifacts: a CMake view (`strata_features.cmake`) and
-per-layer C views (`<layer>/strata_features.h`). Both come from one run, so they
-cannot disagree.
-
-**Manifest.** `strata_manifest.json`: every feature with its value, its owning
-component, and the config variables that were actually read (`by`), plus the
-hashes of every input. This is the answer to "why is this enabled?".
-
-**Escape hatch.** Every problem-domain value is also exported as
-`STRATA_CONFIG_*`, for the cases where no honest feature name exists (clock
-frequency, flash size). It is available on purpose and discouraged on purpose:
-reading it re-couples the code to the hardware. `strata` marks it clearly in the
-generated header, and nothing stops you but review.
+| Term | Definition | What matters |
+| --- | --- | --- |
+| **Problem-domain schema** | The global vocabulary of the target: dimensions with ids, types, ranges, defaults and docs | Components read it; they never extend it. Ids are globally unique |
+| **Dimension** | One fact or number in that vocabulary, e.g. `chip.pioc`, `board.uart_count` | Typed: `bool`, `int`, `float` or `string` |
+| **Preset** | One complete assignment of dimensions — one product | Anything not given falls back to the schema default |
+| **Component** | A directory holding `strata_features.toml` (contract) next to `strata_features.py` (resolvers) | Owns its features and declares one `layer` |
+| **Feature** | A typed value derived from the problem domain, readable by both the build and the code, e.g. `ctl.SUPPORT_WIRELESS_TUNNEL` | Globally unique; depends on problem-domain values only, **never on another feature** |
+| **Resolver** | The function that computes one feature: `@feature("...")` and `(config) -> value` | One feature, one resolver, one owner |
+| **config object** | The problem-domain view handed to a resolver (`config.chip.pioc`) | Every read is recorded — this is how provenance is recovered |
+| **Layer** | A visibility boundary for features | Emitted into that layer's own header; crossing layers is possible but not handed to you |
+| **Views** | The generated artifacts: one CMake view, one C header per layer | Produced by one run, so they cannot disagree |
+| **Manifest** | `strata_manifest.json`: values, owners, the variables read (`by`), input hashes | The answer to "why is this enabled?" |
+| **Escape hatch** | Every problem-domain value, exported as `STRATA_CONFIG_*` | Available on purpose, discouraged on purpose: reading it re-couples the code to hardware |
 
 ---
 
@@ -242,6 +238,6 @@ Python 3.11+ (standard library only), CMake 3.20+.
 strata is free software, licensed under the **GNU General Public License,
 version 3**. The full text is in [LICENSE](LICENSE).
 
-This means: you may use, study, modify and redistribute it, including
-commercially, provided that derivative works are distributed under the same
-license and that users can obtain the source. There is no warranty.
+You may use, study, modify and redistribute it, including commercially, provided
+that derivative works are distributed under the same license and that recipients
+can obtain the source. There is no warranty.
