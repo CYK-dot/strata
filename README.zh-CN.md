@@ -22,11 +22,27 @@ strata 把这条推导做成独立的一层。每个组件声明它对外暴露�
 
 ## 安装
 
-strata 不是一个要安装的软件包，而是一个随源码内嵌进工程的目录，并带着自己的版本历史。
+strata 就住进它服务的那个工程里，所以推荐用 git submodule 引入：每个工程在自己的历史里钉住它构建时用的版本。
+
+```sh
+cd your-project
+git submodule add https://github.com/CYK-dot/strata.git strata
+git commit -m "add strata"
+```
+
+克隆时带上子模块，或之后再拉：
+
+```sh
+git clone --recurse-submodules <your-project>   # 克隆时
+git submodule update --init --recursive        # 普通克隆之后
+git submodule update --remote strata           # 升到更新的 strata
+```
+
+它落在工程根目录下：
 
 ```
 your-project/
-├── strata/                 本仓库
+├── strata/                 子模块
 ├── configs/                配置项与预设
 ├── components/             feature 及其推导函数
 └── CMakeLists.txt

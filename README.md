@@ -35,12 +35,29 @@ worth it for a single build with a single switch — a CMake `option()` is cheap
 
 ## Install
 
-strata is not a package you install; it is a directory you vendor into the
-project it serves, and it brings its own history.
+strata lives inside the project it serves, so the recommended way to bring it in
+is a git submodule: each project pins the version it builds with, in its own
+history.
+
+```sh
+cd your-project
+git submodule add https://github.com/CYK-dot/strata.git strata
+git commit -m "add strata"
+```
+
+Clone with the submodule, or fetch it later:
+
+```sh
+git clone --recurse-submodules <your-project>   # when cloning
+git submodule update --init --recursive        # after a plain clone
+git submodule update --remote strata           # move to a newer strata
+```
+
+It then sits at the project root:
 
 ```
 your-project/
-├── strata/                 this repository
+├── strata/                 the submodule
 ├── configs/                configuration items and presets
 ├── components/             features and the functions that derive them
 └── CMakeLists.txt
