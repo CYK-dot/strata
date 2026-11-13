@@ -9,7 +9,7 @@ from ..errors import StrataError
 
 
 def read_toml(path: Path) -> dict:
-    text = path.read_text(encoding="utf-8")
+    text = path.read_text(encoding="utf-8-sig")
     try:
         return tomllib.loads(text)
     except tomllib.TOMLDecodeError as exc:
@@ -19,7 +19,7 @@ def read_toml(path: Path) -> dict:
 def line_of(path: Path, needle: str) -> int | None:
     """First line containing ``needle``; TOML gives us no positions."""
     try:
-        text = path.read_text(encoding="utf-8")
+        text = path.read_text(encoding="utf-8-sig")
     except OSError:
         return None
     for number, line in enumerate(text.splitlines(), start=1):

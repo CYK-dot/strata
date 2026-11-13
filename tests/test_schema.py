@@ -66,3 +66,13 @@ def test_reports_missing_schema_directory(project, tmp_path):
     with pytest.raises(StrataError) as excinfo:
         schema.load(tmp_path / "nope")
     assert "Schema directory not found" in str(excinfo.value)
+
+
+def test_tolerates_a_utf8_bom(tmp_path):
+    root = tmp_path / "schema"
+    root.mkdir()
+    (root / "bom.toml").write_bytes(
+        b'\xef\xbb\xbf[[dimension]]\nid = "b.x"\ntype = "bool"\ndefault = false\n'
+    )
+    loaded = schema.load(root)
+    assert loaded.ids() == ["b.x"]
