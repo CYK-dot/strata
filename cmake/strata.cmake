@@ -2,7 +2,7 @@
 #
 #   strata_add_project(SCHEMA <dir> PRESETS <dir> COMPONENTS <dir> PRESET <name>
 #                      [OUT <dir>])
-#   strata_add_component(<name> [LAYER <layer>] [DIR <dir>])
+#   strata_add_component(<name> [LAYER <layer>])
 #   strata_link_resolves(<target> <component>...)
 #   strata_get_feature(<id> <out-var>)
 #   strata_get_config(<id> <out-var>)
@@ -57,7 +57,7 @@ macro(strata_add_project)
 endmacro()
 
 function(strata_add_component name)
-  cmake_parse_arguments(_STRATA "" "LAYER;DIR" "" ${ARGN})
+  cmake_parse_arguments(_STRATA "" "LAYER" "" ${ARGN})
   if(NOT STRATA_OUT)
     message(FATAL_ERROR "strata_add_component: call strata_add_project() first")
   endif()

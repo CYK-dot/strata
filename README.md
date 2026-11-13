@@ -177,7 +177,7 @@ endif()
 | Function | Signature | Purpose |
 | --- | --- | --- |
 | `strata_add_project` | `(SCHEMA <dir> PRESETS <dir> COMPONENTS <dir> PRESET <name> [OUT <dir>])` | Generate at configure time and load feature values into the current scope |
-| `strata_add_component` | `(<name> [LAYER <layer>] [DIR <dir>])` | Register a component; creates the imported target `strata::<name>` whose include path is that layer's header directory |
+| `strata_add_component` | `(<name> [LAYER <layer>])` | Register a component; creates the imported target `strata::<name>` whose include path is that layer's header directory |
 | `strata_link_resolves` | `(<target> <component>...)` | Subscribe a target to the generated views |
 | `strata_get_feature` | `(<feature-id> <out-var>)` | Read a feature value for build decisions |
 | `strata_get_config` | `(<config-id> <out-var>)` | Read a raw problem-domain value (discouraged) |
