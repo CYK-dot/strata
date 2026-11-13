@@ -1,103 +1,99 @@
 # strata
 
-**strata is a configuration generator for CMake-based C/C++ projects.**
+A CMake configuration generator that derives software features from a description of the target.
 
-You describe the target — which chip, which board, which product tier — as data
-in a few TOML files, and write small Python functions that turn that description
-into named, typed values called **features**. strata runs during CMake's
-configure step and writes two things: a CMake file, and one C header per layer.
-Your build scripts read the first to decide what to compile; your code reads the
-second to decide what to enable. Both come from the same run, so they cannot
-disagree.
+Most projects of any size carry two kinds of knowledge in the same places: what
+the target hardware *is* — which chip, which board, which options were fitted —
+and what the software *provides* for a given build. The two get welded together
+in preprocessor expressions, and every new product edits code that was supposed
+to be independent of the hardware.
 
-A preset such as
+strata keeps them apart. The target is described as data; the software's
+features are derived from that description by functions that live next to the
+component they belong to. The derivation is written once, so it can be reviewed,
+explained and tested, instead of being copied into every use site.
 
-```toml
-# configs/presets/daplink_plb.toml
-chip.pioc              = true
-product.wireless_debug = true
+The derived features are typed values that both the build system and the C/C++
+code read, from the same generated files. Changing the target description changes
+what gets compiled and what gets enabled, without either side learning how the
+hardware happens to provide a capability.
+
+It pays off when one codebase has to produce several products. It is not worth it
+for a single target with a single switch — a CMake `option()` is cheaper.
+
+## Table of Contents
+
+- [Install](#install)
+- [Usage](#usage)
+- [Concepts](#concepts)
+- [What strata is not](#what-strata-is-not)
+- [Diagnostics](#diagnostics)
+- [API](#api)
+- [Contributing](#contributing)
+- [License](#license)
+
+## Install
+
+strata is not a package you install; it is a directory you vendor into the
+project it serves, and it brings its own history.
+
+```
+your-project/
+├── strata/                 this repository
+├── configs/                target descriptions and presets
+├── components/             features and the functions that derive them
+└── CMakeLists.txt
 ```
 
-becomes, at configure time,
+Dependencies:
 
-```c
-#define STRATA_FEATURE_CTL_SUPPORT_WIRELESS_TUNNEL 1
-#define STRATA_FEATURE_CTL_MAX_TUNNEL_SESSIONS     1
+- CMake 3.20 or newer
+- Python 3.11 or newer, standard library only. CMake invokes it during the
+  configure step; you never call it yourself.
+
+## Usage
+
+Enable it once, near the top of `CMakeLists.txt`:
+
+```cmake
+list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/strata/cmake)
+include(strata)
+
+strata_add_project(
+  SCHEMA     ${CMAKE_CURRENT_SOURCE_DIR}/configs/schema
+  PRESETS    ${CMAKE_CURRENT_SOURCE_DIR}/configs/presets
+  COMPONENTS ${CMAKE_CURRENT_SOURCE_DIR}/components
+  PRESET     ${STRATA_PRESET}          # e.g. from -DSTRATA_PRESET=...
+)
+
+strata_add_component(ctl LAYER ctl)
+strata_add_component(bsp LAYER bsp)
+
+add_executable(firmware src/ctlp.c)
+strata_link_resolves(firmware ctl)
+
+strata_get_feature("bsp.TUNNEL_BACKEND" backend)
+target_sources(firmware PRIVATE bsp/tunnel_${backend}.c)
 ```
 
-so the control plane can write
+Then the code includes one header and reads the features:
 
 ```c
+#include "strata_features.h"
+
+int main(void)
+{
 #if STRATA_FEATURE_CTL_SUPPORT_WIRELESS_TUNNEL
     tunnel_start(STRATA_FEATURE_CTL_MAX_TUNNEL_SESSIONS);
+#else
+    tunnel_start(0);
 #endif
+    return 0;
+}
 ```
 
-without knowing that a programmable I/O controller is what made it possible.
-
-Generating macros is the easy part — a CMake `option()` does that. **What makes
-it worth a tool** is that the derivation from *what the target is* to *what the
-software offers* is written once, in one place, where it can be reviewed,
-explained and tested. Everything else in this document follows from that.
-
----
-
-## What it changes
-
-```c
-/* Before: a control plane reading hardware facts it should not know.
- * Three facts, one capability, decided at the wrong layer. */
-#if defined(MCU_HAS_PIOC) || defined(BOARD_HAS_BLE_MODULE) || defined(BOARD_HAS_AT_ADAPTER)
-    tunnel_start(2);
-#endif
-
-/* After: the same control plane reading a capability.
- * Which hardware provides the tunnel is below the abstraction now. */
-#if STRATA_FEATURE_CTL_SUPPORT_WIRELESS_TUNNEL
-    tunnel_start(STRATA_FEATURE_CTL_MAX_TUNNEL_SESSIONS);
-#endif
-```
-
-The second version cannot rot in the same way: adding a fourth hardware path is
-a line in a mapping file, not an edit to control-plane code. What changed is not
-the syntax but **where the knowledge lives**.
-
----
-
-## What strata is not
-
-| It is not | Because |
-| --- | --- |
-| A configuration manager | It does not own where values come from, how they are stored, or how they are distributed |
-| A Kconfig replacement | Kconfig's symbols share one flat namespace and cannot express which layer owns them; strata's whole point is that boundary |
-| A build system | It compiles nothing; it produces input that CMake consumes |
-| A runtime switch service | It covers build-time and compile-time decisions only, never what a running device does |
-| An enforcement mechanism | It provides the layered path and makes the other path visible; it does not block it |
-
----
-
-## When you need it
-
-- **One source tree, several products** that differ in *how* a capability is
-  provided, not in *whether* the software offers it.
-- **`#if` predicates that mix several hardware facts** (`BOARD_HAS_BLE ||
-  MCU_HAS_PIOC`). Every new target edits them again.
-- **Build logic and source code drift apart**: CMake picks sources from one set
-  of switches, the C code branches on another.
-- **Nobody can answer "why does this build have this feature?"** without reading
-  code and datasheets.
-- **The mapping itself deserves review**: hardware conclusions are worth writing
-  down once, with a name, instead of being copied into every use site.
-
-## When you probably don't
-
-- One target and one switch. A CMake `option()` is cheaper and clearer.
-- Driver internals. There strata only buys you solved, validated combinations of
-  macros; the real payoff is at the layers that promise to be hardware
-  agnostic — control plane, protocol stacks, application logic.
-- A single build with no variants: there is nothing to map.
-
----
+What is behind a feature — a BLE module, a programmable I/O controller, a UART
+adapter — never reaches this file.
 
 ## Concepts
 
@@ -118,60 +114,36 @@ files, output and errors.
 | **Manifest** | `strata_manifest.json`: values, owners, the variables read (`by`), input hashes | The answer to "why is this enabled?" |
 | **Escape hatch** | Every problem-domain value, exported as `STRATA_CONFIG_*` | Available on purpose, discouraged on purpose: reading it re-couples the code to hardware |
 
----
+## What strata is not
 
-## Layout
+| It is not | Because |
+| --- | --- |
+| A configuration manager | It does not own where values come from, how they are stored, or how they are distributed |
+| A Kconfig replacement | Kconfig's symbols share one flat namespace and cannot express which layer owns them; strata's whole point is that boundary |
+| A build system | It compiles nothing; it produces input that CMake consumes |
+| A runtime switch service | It covers build-time and compile-time decisions only, never what a running device does |
+| An enforcement mechanism | It provides the layered path and makes the other path visible; it does not block it |
 
-strata is normally vendored inside the project it serves, in one directory:
+## Diagnostics
+
+Errors are English, ASCII only, and shaped like CMake's own, so editors and CI
+can jump to the location:
 
 ```
-project/
-├── strata/                 the tool: engine, CMake module, its own history
-├── configs/schema/         problem-domain declarations (any number of files)
-├── configs/presets/        one file per product
-├── components/<name>/feature/strata_features.{toml,py}
-├── src/                    code that reads features
-└── CMakeLists.txt
+CMake Error at configs/presets/daplink_x.toml:2 (strata_add_project):
+  Unknown variable "board.has_ble".
+
+  Did you mean "board.has_ble_module"?
 ```
 
----
+Hard failures: duplicate declarations, prefix collisions, unknown or missing
+preset values, type and range violations, features declared without a resolver
+(or the reverse), duplicate feature names, resolvers returning the wrong type,
+resolvers that raise.
 
-## Usage
+## API
 
-There is nothing to run and nothing to install: strata works inside `CMakeLists.txt`,
-during the configure step.
-
-### In CMake
-
-```cmake
-list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/strata/cmake)
-include(strata)
-
-# 1. generate once, at configure time
-strata_add_project(
-  SCHEMA     ${CMAKE_CURRENT_SOURCE_DIR}/configs/schema
-  PRESETS    ${CMAKE_CURRENT_SOURCE_DIR}/configs/presets
-  COMPONENTS ${CMAKE_CURRENT_SOURCE_DIR}/components
-  PRESET     ${STRATA_PRESET}          # e.g. from -DSTRATA_PRESET=...
-)
-
-# 2. register the components this project uses
-strata_add_component(ctl LAYER ctl)
-strata_add_component(bsp LAYER bsp)
-
-# 3. subscribe a target to a layer's features
-add_executable(firmware src/ctlp.c)
-strata_link_resolves(firmware ctl)
-
-# 4. read values when the build itself has to decide
-strata_get_feature("bsp.TUNNEL_BACKEND" backend)
-target_sources(firmware PRIVATE bsp/tunnel_${backend}.c)
-
-strata_get_feature("ctl.SUPPORT_WIRELESS_TUNNEL" has_tunnel)
-if(has_tunnel)
-  target_link_libraries(firmware PRIVATE tunnel_client)
-endif()
-```
+### CMake functions
 
 | Function | Signature | Purpose |
 | --- | --- | --- |
@@ -191,30 +163,7 @@ Notes:
 - A change to any schema, preset or resolver file triggers a re-configure
   automatically (`CMAKE_CONFIGURE_DEPENDS`), so the values can never be stale.
 
-### In C and C++
-
-`strata_link_resolves(firmware ctl)` puts the `ctl` layer's header on the
-target's include path. Nothing else is needed:
-
-```c
-#include "strata_features.h"
-
-int main(void)
-{
-#if STRATA_FEATURE_CTL_SUPPORT_WIRELESS_TUNNEL
-    tunnel_start(STRATA_FEATURE_CTL_MAX_TUNNEL_SESSIONS);
-#else
-    tunnel_start(0);
-#endif
-    return 0;
-}
-```
-
-All layers use the same header name, so which file `strata_features.h` resolves
-to is decided by the include path: a target subscribed to `ctl` cannot name
-`bsp`'s features, because that header is not on its path.
-
-### Generated artifacts
+### Generated files
 
 ```
 build/generated/
@@ -225,49 +174,31 @@ build/generated/
 └── strata_manifest.json      values, provenance, input hashes
 ```
 
-Names: a feature `ctl.MAX_TUNNEL_SESSIONS` becomes
+All layers use the same header name, so which file `strata_features.h` resolves
+to is decided by the include path: a target subscribed to `ctl` cannot name
+`bsp`'s features, because that header is not on its path.
+
+Naming: a feature `ctl.MAX_TUNNEL_SESSIONS` becomes
 `STRATA_FEATURE_CTL_MAX_TUNNEL_SESSIONS` in C and
 `STRATA_FEATURE_ctl.MAX_TUNNEL_SESSIONS` in CMake; a dimension `chip.pioc`
 becomes `STRATA_CONFIG_CHIP_PIOC`. The two prefixes never overlap, so the prefix
 alone tells you whether you are holding a fact or a capability.
 
----
+## Contributing
 
-## Diagnostics
+Issues and pull requests are welcome. The test suite runs with pytest and needs
+nothing beyond Python 3.11:
 
-Errors are English, ASCII only, and shaped like CMake's own, so editors and CI
-can jump to the location:
-
-```
-CMake Error at configs/presets/daplink_x.toml:2 (strata_add_project):
-  Unknown variable "board.has_ble".
-
-  Did you mean "board.has_ble_module"?
+```sh
+python -m pytest -q
 ```
 
-Hard failures: duplicate declarations, prefix collisions, unknown or missing
-preset values, type and range violations, features declared without a resolver
-(or the reverse), duplicate feature names, resolvers returning the wrong type,
-resolvers that raise.
-
----
-
-## Requirements
-
-- CMake 3.20 or newer.
-- Python 3.11 or newer, standard library only. CMake invokes it during configure;
-  you never call it yourself.
-
----
+Please keep the generated output deterministic: the tests compare two runs
+byte for byte.
 
 ## License
 
 Copyright (C) 2026 CYK-Dot.
 
-strata is free software, licensed under the **GNU General Public License,
-version 3 or (at your option) any later version** (GPL-3.0-or-later). The full
-text is in [LICENSE](LICENSE).
-
-You may use, study, modify and redistribute it, including commercially, provided
-that derivative works are distributed under the same license and that recipients
-can obtain the source. There is no warranty.
+GPL-3.0-or-later — GNU General Public License, version 3 or any later version.
+The full text is in [LICENSE](LICENSE).
