@@ -117,19 +117,6 @@ int main(void)
 | 强制机制 | 它让人看见谁读了配置项而不是 feature；它不拦人 |
 | 硬件工具 | 硬件只是最常见的第一个场景，不是主题。任何有多个答案的配置，都适用同一套形状 |
 
-## 诊断
-
-报错一律英文、纯 ASCII，形状对齐 CMake，编辑器和 CI 能直接跳到出错位置：
-
-```
-CMake Error at configs/presets/daplink_x.toml:2 (strata_add_project):
-  Unknown variable "board.has_ble".
-
-  Did you mean "board.has_ble_module"?
-```
-
-会被判为硬失败的情况：重复声明、前缀冲突、预设里的未知项或缺失必填、类型与取值范围不符、声明了 feature 却没有 resolver（或反过来）、feature 重名、resolver 返回类型不符、resolver 抛异常。
-
 ## 接口
 
 ### CMake 函数
@@ -163,16 +150,6 @@ build/generated/
 所有 feature 都在同一个头文件里。调用过 `strata_link_resolves` 的目标拿得到它，没调用过的拿不到。
 
 命名规则：`ctl.MAX_TUNNEL_SESSIONS` 在 C 侧是 `STRATA_FEATURE_CTL_MAX_TUNNEL_SESSIONS`，在 CMake 侧是 `STRATA_FEATURE_ctl.MAX_TUNNEL_SESSIONS`；配置项 `chip.pioc` 是 `STRATA_CONFIG_CHIP_PIOC`。两队前缀不交叉，光看前缀就知道手里拿的是**配置项**还是**feature**。
-
-## 参与
-
-欢迎提 issue 和 pull request。测试用 pytest，除 Python 3.11 之外不需要别的：
-
-```sh
-python -m pytest -q
-```
-
-请保持生成物确定性：测试会逐字节比较两次运行的结果。
 
 ## 许可证
 

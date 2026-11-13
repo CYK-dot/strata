@@ -137,23 +137,6 @@ files, output and errors.
 | An enforcement mechanism | It shows what reads an item instead of a feature; it does not block it |
 | A hardware tool | Hardware is the usual first case, not the subject. Any configuration with more than one answer fits the same shape |
 
-## Diagnostics
-
-Errors are English, ASCII only, and shaped like CMake's own, so editors and CI
-can jump to the location:
-
-```
-CMake Error at configs/presets/daplink_x.toml:2 (strata_add_project):
-  Unknown variable "board.has_ble".
-
-  Did you mean "board.has_ble_module"?
-```
-
-Hard failures: duplicate declarations, prefix collisions, unknown or missing
-preset values, type and range violations, features declared without a resolver
-(or the reverse), duplicate feature names, resolvers returning the wrong type,
-resolvers that raise.
-
 ## API
 
 ### CMake functions
@@ -200,18 +183,6 @@ Naming: a feature `ctl.MAX_TUNNEL_SESSIONS` becomes
 `STRATA_FEATURE_ctl.MAX_TUNNEL_SESSIONS` in CMake; a configuration item
 `chip.pioc` becomes `STRATA_CONFIG_CHIP_PIOC`. The two prefixes never overlap, so
 the prefix alone tells you whether you are holding an item or a feature.
-
-## Contributing
-
-Issues and pull requests are welcome. The test suite runs with pytest and needs
-nothing beyond Python 3.11:
-
-```sh
-python -m pytest -q
-```
-
-Please keep the generated output deterministic: the tests compare two runs
-byte for byte.
 
 ## License
 
