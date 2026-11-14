@@ -6,19 +6,18 @@ English | [简体中文](README.zh-CN.md)
 
 Turns configuration items into named features that CMake and C/C++ code read.
 
-This file follows one running example: a USB debug probe whose firmware can
-offer a *wireless debug tunnel* — the probe debugs the target board over BLE
-instead of a cable. Whether that is possible rests on facts such as: a BLE
-module is soldered on the board (`board.has_ble_module`), the chip carries a
-programmable I/O controller (`chip.pioc`), the product tier offers wireless
-debugging (`product.wireless_debug`). Facts like these are **configuration
-items**. What the software can do — `ctl.SUPPORT_WIRELESS_TUNNEL`, "this build
-can open the tunnel" — is a **feature**, derived from the items once; the
-build and the code read only the feature. A feature id carries its owning
-component as a prefix: `ctl.` is the control plane, `bsp.` the board support.
-Features may build on other features: a component declares `requires` and
-derives its features from the lower layer's features, so hardware words stay
-in the hardware layer.
+A **configuration item** is a declared fact about the target or the product —
+what hardware is fitted, what the chip provides, what the tier offers. A
+**feature** is what the software can do: a named, typed value that both the
+build and the code read. strata derives the features from the items, once, in
+a layer of its own, and both sides read the same derived values, so the build
+and the sources cannot drift apart.
+
+A feature may also build on the features of another component: the component
+declares `requires`, and its resolvers compose the lower layer's features, so
+the hardware words stay in the hardware layer. Feature ids carry their owning
+component as a prefix — `ctl.` for a control plane, `bsp.` for board support —
+so every value names the component that owns it.
 
 The obvious alternative is to read the items directly: `#ifdef` in the sources,
 `if()` in CMake. That works while there are two items. As they multiply:
@@ -86,6 +85,11 @@ Dependencies:
 
 ## Usage
 
+The example project is a USB debug probe. Its firmware can open a *wireless
+debug tunnel* — carry debugging to the target board over BLE instead of a
+cable — and whether it may depends on the fitted hardware and the product
+tier.
+
 The product is chosen when configuring, not in the build file, so one
 `CMakeLists.txt` builds every product:
 
@@ -120,9 +124,9 @@ add_executable(firmware
 strata_link_resolves(firmware)   # every feature becomes visible to this target
 ```
 
-`backend` is `ble`, `plb`, `uart_ble` or `none` — the tunnel carried by the
-soldered BLE module, by the chip's I/O controller, by a UART-attached BLE
-adapter, or not carried at all. Here it decides which BSP file is compiled.
+`backend` is `ble`, `plb`, `uart_ble` or `none` — carried by the soldered BLE
+module, by the chip's I/O controller, by a UART-attached BLE adapter, or not
+carried at all. Here it decides which BSP file is compiled.
 That decision belongs to the build, not to strata — strata only guarantees the
 value is the right one.
 
@@ -150,7 +154,9 @@ never reaches this file.
 ## Deriving a feature from other features
 
 A control plane can derive its features from a BSP's features, so the hardware
-vocabulary (`chip.pioc`, `board.has_ble_module`) stops inside the BSP. The BSP
+vocabulary — a programmable I/O controller on the chip (`chip.pioc`), a BLE
+module soldered on the board (`board.has_ble_module`) — stops inside the BSP.
+The BSP
 first turns raw facts into capabilities — `bsp.TUNNEL_BACKEND` names the way
 the tunnel is carried, `bsp.HAS_WIRELESS_TUNNEL` says whether it can be carried
 at all, `bsp.MAX_SESSIONS` says how many concurrent sessions that way supports
@@ -203,10 +209,10 @@ files, output and errors.
 | Term | Definition | What matters |
 | --- | --- | --- |
 | **Configuration schema** | The global vocabulary of configuration items: ids, types, ranges, defaults and docs | Components read it; they never extend it. Ids are globally unique |
-| **Configuration item** | One declared value, e.g. `board.has_ble_module`, `chip.pioc`, `product.wireless_debug` | Typed: `bool`, `int`, `float` or `string`. Its meaning belongs to whoever owns that domain |
+| **Configuration item** | One declared value, e.g. `board.has_ble_module` — a BLE module is soldered on the board | Typed: `bool`, `int`, `float` or `string`. Its meaning belongs to whoever owns that domain |
 | **Preset** | One complete assignment of items — one product, one deployment, one customer | Anything not given falls back to the schema default |
 | **Component** | A directory holding `strata_features.toml` (contract) next to `strata_features.py` (resolvers) | Owns its features. The top-level `component = "..."` line is its identity and owner tag; the top-level `requires` line lists the components it reads from |
-| **Feature** | A named, typed value derived from configuration items or from other features, readable by both the build and the code, e.g. `ctl.SUPPORT_WIRELESS_TUNNEL` | This is the software's vocabulary, not the configuration's. Globally unique, and visible to every subscriber; a feature may read only the cone of its component's `requires` and the siblings its own `requires` reaches |
+| **Feature** | A named, typed value derived from configuration items or from other features, readable by both the build and the code, e.g. `ctl.SUPPORT_WIRELESS_TUNNEL` (this build can open the tunnel) | This is the software's vocabulary, not the configuration's. Globally unique, and visible to every subscriber; a feature may read only the cone of its component's `requires` and the siblings its own `requires` reaches |
 | **Resolver** | The function that computes one feature: `@feature("...")` and `(config) -> value` or `(config, features) -> value` | One feature, one resolver, one owner |
 | **config object** | The configuration view handed to a resolver (`config.chip.pioc`) | Every read is recorded — this is how provenance is recovered |
 | **features view** | The read-only view of already-evaluated features (`features.bsp.HAS_WIRELESS_TUNNEL`, `features["bsp.MAX_SESSIONS"]`) | Reads are checked against the declared graph and recorded as `from` |

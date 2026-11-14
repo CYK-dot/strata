@@ -6,7 +6,9 @@
 
 把配置项转换成带名字的 feature，供 CMake 与 C/C++ 读取。
 
-本文件贯穿一个示例：一台 USB 调试探针，它的固件可以提供*无线调试隧道*——探针通过 BLE 而不是线缆去调试目标板。能不能提供，取决于这样一些事实：板子上焊着 BLE 模组（`board.has_ble_module`）、芯片带着可编程 I/O 控制器（`chip.pioc`）、这个产品档位提供无线调试（`product.wireless_debug`）。这样的事实是**配置项**。软件能做什么——`ctl.SUPPORT_WIRELESS_TUNNEL`，即「这次构建可以打开隧道」——是 **feature**，由配置项推导一次得到；构建与代码只读 feature。feature id 自带归属组件前缀：`ctl.` 是控制面，`bsp.` 是板级支持。feature 还可以彼此推导：组件用顶层 `requires` 声明它读哪个组件，再从下层的 feature 推出自己的 feature，于是硬件词汇就停在硬件层。
+**配置项**是声明出来的、关于目标或产品的事实——板上装了什么硬件、芯片提供什么、档位承诺什么。**feature**是软件能做什么：一个带名字、带类型的值，构建与代码都读它。strata 把 feature 从配置项推导出来，只推导一次，做成独立的一层；两侧读的是同一批推导值，构建与源码因此不会各说各话。
+
+feature 还可以建立在别的组件的 feature 之上：组件用顶层 `requires` 声明它读谁，resolver 组合下层的 feature，硬件词汇于是停在硬件层。feature id 自带归属组件前缀——控制面用 `ctl.`，板级支持用 `bsp.`——每个值都写明它出自哪个组件。
 
 最直接的做法是让两侧都去读配置项：源码里 `#ifdef`，CMake 里 `if()`。只有两个配置项时，这样没问题。可一旦多起来：
 
@@ -57,6 +59,8 @@ your-project/
 - Python 3.11 及以上，仅用标准库。它由 CMake 在 configure 阶段调用，使用者不需要自己执行。
 
 ## 使用
+
+示例工程是一台 USB 调试探针。它的固件可以打开一条*无线调试隧道*——通过 BLE 而不是线缆把调试通道送到目标板——能不能打开，取决于装了什么硬件、产品档位是什么。
 
 产品在配置时选，不写在构建文件里，因此同一份 `CMakeLists.txt` 能构建所有产品：
 
@@ -112,7 +116,7 @@ int main(void)
 
 ## 从别的 feature 推导 feature
 
-控制面的 feature 可以由 BSP 的 feature 推导，硬件词汇（`chip.pioc`、`board.has_ble_module`）就停在 `bsp` 内部。BSP 先把原始事实翻译成能力——`bsp.TUNNEL_BACKEND` 指出隧道由谁承载，`bsp.HAS_WIRELESS_TUNNEL` 说明是否承载得了，`bsp.MAX_SESSIONS` 给出这种方式支持的并发会话数——控制面再组合这些能力：
+控制面的 feature 可以由 BSP 的 feature 推导，硬件词汇——芯片上的可编程 I/O 控制器（`chip.pioc`）、板上焊着的 BLE 模组（`board.has_ble_module`）——就停在 `bsp` 内部。BSP 先把原始事实翻译成能力——`bsp.TUNNEL_BACKEND` 指出隧道由谁承载，`bsp.HAS_WIRELESS_TUNNEL` 说明是否承载得了，`bsp.MAX_SESSIONS` 给出这种方式支持的并发会话数——控制面再组合这些能力：
 
 ```toml
 # components/bsp/strata_features.toml
@@ -153,10 +157,10 @@ def max_tunnel_sessions(config, features):
 | 术语 | 定义 | 要点 |
 | --- | --- | --- |
 | **配置声明（schema）** | 配置项的全局词汇表：id、类型、取值范围、默认值与说明 | 组件只读不写；id 全局唯一 |
-| **配置项（item）** | 声明出来的一条值，如 `board.has_ble_module`、`chip.pioc`、`product.wireless_debug` | 有类型：`bool` / `int` / `float` / `string`。它的含义属于拥有它的那个领域 |
+| **配置项（item）** | 声明出来的一条值，如 `board.has_ble_module`——板上焊着 BLE 模组 | 有类型：`bool` / `int` / `float` / `string`。它的含义属于拥有它的那个领域 |
 | **预设（preset）** | 一份完整的配置项取值：一款产品、一次部署、一个客户 | 没写到的项取声明的默认值 |
 | **组件（component）** | 一个目录：`strata_features.toml` 是契约，`strata_features.py` 是求解函数 | 拥有自己的 feature。顶层 `component = "..."` 一行是它的身份与归属标签；顶层 `requires` 一行列出它要读的组件 |
-| **feature** | 由配置项或其他 feature 推导出的、带名字带类型的值，构建与代码都能读，如 `ctl.SUPPORT_WIRELESS_TUNNEL` | 这是**软件的词汇**，不是配置的词汇。全局唯一，任何订阅了它的目标都看得见；一个 feature 只能读它所在组件的 `requires` 锥内的 feature，以及自己的 `requires` 链能到达的同组件 feature |
+| **feature** | 由配置项或其他 feature 推导出的、带名字带类型的值，构建与代码都能读，如 `ctl.SUPPORT_WIRELESS_TUNNEL`（这次构建可以打开隧道） | 这是**软件的词汇**，不是配置的词汇。全局唯一，任何订阅了它的目标都看得见；一个 feature 只能读它所在组件的 `requires` 锥内的 feature，以及自己的 `requires` 链能到达的同组件 feature |
 | **resolver** | 算出一个 feature 的函数：`@feature("...")` 加上 `(config) -> value` 或 `(config, features) -> value` | 一个 feature、一个函数、一个归属人 |
 | **config 对象** | 传给 resolver 的配置视图（`config.chip.pioc`） | 每次读取都被记录——溯源就是从这里来的 |
 | **features 视图** | 只读的已求值 feature 视图（`features.bsp.HAS_WIRELESS_TUNNEL`、`features["bsp.MAX_SESSIONS"]`） | 每次读取先按声明图校验，再记入 `from` |
