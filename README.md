@@ -4,41 +4,45 @@ English | [简体中文](README.zh-CN.md)
 
 [![CI](https://github.com/CYK-dot/strata/actions/workflows/ci.yml/badge.svg)](https://github.com/CYK-dot/strata/actions/workflows/ci.yml)
 
-Turns configuration items into named features that CMake and C/C++ code read.
+## The problem
 
-A **configuration item** is a declared fact about the target or the product —
-what hardware is fitted, what the chip provides, what the tier offers. A
-**feature** is what the software can do: a named, typed value that both the
-build and the code read. strata derives the features from the items, once, in
-a layer of its own, and both sides read the same derived values, so the build
-and the sources cannot drift apart.
+A codebase that serves several products — several chips, several tiers,
+several deployments — has to decide, for every build, what the software can
+do. The obvious way is to read those facts directly where they are needed:
+`#ifdef` in the sources, `if()` in CMake. That works while there are two
+facts. As they multiply:
 
-A feature may also build on the features of another component: the component
-declares `requires`, and its resolvers compose the lower layer's features, so
-the hardware words stay in the hardware layer. Feature ids carry their owning
-component as a prefix — `ctl.` for a control plane, `bsp.` for board support —
-so every value names the component that owns it.
-
-The obvious alternative is to read the items directly: `#ifdef` in the sources,
-`if()` in CMake. That works while there are two items. As they multiply:
-
-- the predicates grow with the items and with their combinations, and the same
+- the predicates grow with the facts and with their combinations, and the same
   decision is copied into every place that needs it;
-- the code speaks the configuration's vocabulary, so a new chip or a new customer
-  tier means editing code that had no business knowing those words;
-- the build and the sources decide independently, and nothing keeps them in step;
+- the code speaks the configuration's vocabulary, so a new chip or a new
+  customer tier means editing code that had no business knowing those words;
+- the build and the sources decide independently, and nothing keeps them in
+  step;
 - nobody can answer "why is this enabled in this build?" without reading both.
 
-**The idea.** Nothing above the configuration should read the items; it should
-read what was derived from them.
+## The idea
 
-strata makes that derivation a layer of its own. Each component declares the
+Nothing above the configuration should read the items; everything should read
+what was derived from them. Facts about the target and capabilities of the
+software are two different vocabularies, and the derivation between them is
+one hop — so that derivation belongs in a layer of its own, written once,
+reviewable, testable, explainable. And since one capability can rest on
+others, that layer is a graph, not a list.
+
+## What strata is
+
+strata is that layer. A **configuration item** is a declared fact about the
+target or the product — what hardware is fitted, what the chip provides, what
+the tier offers. A **feature** is what the software can do: a named, typed
+value that both the build and the code read. Each component declares the
 features it exposes and writes the function that derives each one — from the
 configuration items, or from the features of the components it declares in
-`requires`. The declarations form a directed graph that strata evaluates in a
-deterministic order and emits as a CMake file and one C header. Adding a chip,
-a tier or a region becomes a new derivation instead of an edit to code that
-should not care.
+`requires`. The declarations form a directed graph; strata evaluates it in a
+deterministic order and emits a CMake file, a C header and a manifest that
+records every derivation. Both sides read the same values, so the build and
+the sources cannot drift apart; feature ids carry their owning component as a
+prefix (`ctl.` for a control plane, `bsp.` for board support), so every value
+names the component that owns it.
 
 Hardware is the usual first case — several different chips can provide the same
 capability — but nothing in strata is specific to hardware. Any configuration
