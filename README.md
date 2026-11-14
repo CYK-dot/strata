@@ -232,7 +232,7 @@ files, output and errors.
 | A Kconfig replacement | Kconfig says nothing about what a symbol *means* to the software, and nothing derives one symbol from another; strata's subject is that derivation, not the storage of values |
 | A build system | It compiles nothing; it produces input that CMake consumes |
 | A runtime switch service | It covers build-time and compile-time decisions only, never what a running device does |
-| An enforcement mechanism | It shows what reads an item instead of a feature; it does not block it |
+| An enforcement mechanism | It enforces the declared feature graph — a feature read outside the cone or the sibling closure is a hard error — but reads of configuration items stay unblocked, and whether the layering is good remains a human judgement |
 | A hardware tool | Hardware is the usual first case, not the subject. Any configuration with more than one answer fits the same shape |
 
 ## API
