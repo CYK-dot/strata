@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 CYK-Dot
 
-"""Diagnostics, rendered in CMake's own style (see ADR-0010).
+"""Diagnostics, rendered in CMake's own style.
 
-    CMake Error at configs/presets/daplink_x.toml:2 (strata_add_project):
+    CMake Error at configs/presets/daplink_x.toml:2 (strata_project):
       Unknown variable "board.has_ble".
 
       Did you mean "board.has_ble_module"? It is declared in
@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from typing import Sequence
 
-DEFAULT_COMMAND = "strata_add_project"
+DEFAULT_COMMAND = "strata_project"
 
 
 class StrataError(Exception):

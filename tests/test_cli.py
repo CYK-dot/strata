@@ -16,7 +16,7 @@ def test_generate_succeeds_and_reports_a_summary(project, capsys):
             "--presets",
             str(paths.presets),
             "--component",
-            f"app={paths.components / 'app'}",
+            str(paths.components / "app"),
             "--preset",
             "p1",
             "--out",
@@ -38,7 +38,7 @@ def test_failure_uses_the_cmake_diagnostic_shape(project, capsys):
             "--presets",
             str(paths.presets),
             "--component",
-            f"app={paths.components / 'app'}",
+            str(paths.components / "app"),
             "--preset",
             "p2",
             "--out",
@@ -48,5 +48,5 @@ def test_failure_uses_the_cmake_diagnostic_shape(project, capsys):
     assert code == 1
     err = capsys.readouterr().err
     assert err.startswith("CMake Error at ")
-    assert "(strata_add_project):" in err
+    assert "(strata_project):" in err
     assert 'Unknown variable "a.coun"' in err

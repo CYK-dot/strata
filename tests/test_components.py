@@ -11,15 +11,50 @@ from strata.errors import StrataError
 
 def test_discovers_and_loads_resolvers(project):
     paths = project()
-    found = components_engine.load_all(paths.component_pairs)
+    found = components_engine.load_all(paths.component_dirs)
     assert [component.id for component in found] == ["app"]
     assert sorted(found[0].resolvers) == ["app.DOUBLE", "app.FLAG"]
+
+
+def test_component_id_comes_from_the_toml_not_the_directory(project):
+    paths = project(
+        {
+            "components/app/feature/strata_features.toml": """
+component = "renamed"
+
+[[feature]]
+name = "renamed.DOUBLE"
+type = "int"
+
+[[feature]]
+name = "renamed.FLAG"
+type = "bool"
+""",
+            "components/app/feature/strata_features.py": """
+from strata import feature
+
+
+@feature("renamed.DOUBLE")
+def double(config):
+    return 0
+
+
+@feature("renamed.FLAG")
+def flag(config):
+    return False
+""",
+        }
+    )
+    found = components_engine.load_all(paths.component_dirs)
+    assert found[0].id == "renamed"
 
 
 def test_declared_feature_without_resolver(project):
     paths = project(
         {
             "components/app/feature/strata_features.toml": """
+component = "app"
+
 [[feature]]
 name = "app.DOUBLE"
 type = "int"
@@ -31,7 +66,7 @@ type = "bool"
         }
     )
     with pytest.raises(StrataError) as excinfo:
-        components_engine.load_all(paths.component_pairs)
+        components_engine.load_all(paths.component_dirs)
     assert 'Feature "app.MISSING" is declared but has no resolver' in str(excinfo.value)
 
 
@@ -59,19 +94,21 @@ def extra(config):
         }
     )
     with pytest.raises(StrataError) as excinfo:
-        components_engine.load_all(paths.component_pairs)
+        components_engine.load_all(paths.component_dirs)
     assert 'Feature "app.EXTRA" has a resolver but is not declared' in str(excinfo.value)
 
 
-def test_duplicate_feature_across_components(project):
+def test_two_directories_declaring_the_same_component(project):
     paths = project(
         {
-            "components/other/feature/strata_features.toml": """
+            "components/twin/feature/strata_features.toml": """
+component = "app"
+
 [[feature]]
 name = "app.FLAG"
 type = "bool"
 """,
-            "components/other/feature/strata_features.py": """
+            "components/twin/feature/strata_features.py": """
 from strata import feature
 
 
@@ -81,13 +118,37 @@ def flag(config):
 """,
         }
     )
-    pairs = [
-        ("app", paths.components / "app"),
-        ("other", paths.components / "other"),
-    ]
+    paths.component_dirs.append(paths.components / "twin")
     with pytest.raises(StrataError) as excinfo:
-        components_engine.load_all(pairs)
-    assert 'Feature "app.FLAG" is already declared in' in str(excinfo.value)
+        components_engine.load_all(paths.component_dirs)
+    message = str(excinfo.value)
+    assert 'Component "app" is declared twice:' in message
+    listed = message.split(":", 1)[1].rstrip(".")
+    first, second = listed.split(",")
+    assert first.strip().endswith("strata_features.toml")
+    assert second.strip().endswith("strata_features.toml")
+    assert first.strip() != second.strip()
+
+
+def test_same_feature_declared_twice_in_one_component(project):
+    paths = project(
+        {
+            "components/app/feature/strata_features.toml": """
+component = "app"
+
+[[feature]]
+name = "app.FLAG"
+type = "bool"
+
+[[feature]]
+name = "app.FLAG"
+type = "bool"
+"""
+        }
+    )
+    with pytest.raises(StrataError) as excinfo:
+        components_engine.load_all(paths.component_dirs)
+    assert 'Feature "app.FLAG" is declared twice in this component.' in str(excinfo.value)
 
 
 def test_resolver_file_syntax_error(project):
@@ -95,5 +156,5 @@ def test_resolver_file_syntax_error(project):
         {"components/app/feature/strata_features.py": "def broken(:\n"}
     )
     with pytest.raises(StrataError) as excinfo:
-        components_engine.load_all(paths.component_pairs)
+        components_engine.load_all(paths.component_dirs)
     assert "Syntax error in resolver file" in str(excinfo.value)

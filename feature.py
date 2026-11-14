@@ -6,11 +6,13 @@
 A component's ``strata_features.py`` declares one resolver per feature:
 
     @feature("ctl.SUPPORT_WIRELESS_TUNNEL")
-    def support_wireless_tunnel(config):
+    def support_wireless_tunnel(config, features):
         ...
 
-The decorator may be repeated with different names; function names are local
-and carry no meaning beyond readability.
+The resolver takes ``config`` and may take a second ``features`` argument,
+the read-only view of the features it declared in ``requires``. The decorator
+may be repeated with different names; function names are local and carry no
+meaning beyond readability.
 """
 
 from __future__ import annotations

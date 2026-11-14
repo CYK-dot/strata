@@ -158,6 +158,7 @@ def _write_manifest(
             "type": item.declaration.type,
             "owner": item.declaration.component,
             "by": item.reads,
+            "from": item.froms,
         }
     manifest = {
         "engine": f"strata {__version__}",
@@ -165,7 +166,10 @@ def _write_manifest(
         "inputs": inputs,
         "features": features,
         "components": {
-            component.id: {"features": sorted(decl.name for decl in component.declarations)}
+            component.id: {
+                "features": sorted(decl.name for decl in component.declarations),
+                "requires": sorted(component.requires),
+            }
             for component in components
         },
         "config": preset.values,

@@ -36,10 +36,11 @@ class Result:
 def generate(
     schema_dir: str | Path,
     presets_dir: str | Path,
-    components: Iterable[tuple[str, str | Path]],
+    components: Iterable[str | Path],
     preset_name: str,
     out_dir: str | Path,
 ) -> Result:
+    """Run the pipeline; ``components`` is a list of component directories."""
     schema = schema_mod.load(schema_dir)
     preset = preset_mod.load(presets_dir, preset_name, schema)
     loaded = components_mod.load_all(components)

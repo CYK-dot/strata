@@ -29,9 +29,9 @@ def build_parser() -> argparse.ArgumentParser:
     generate_parser.add_argument(
         "--component",
         action="append",
-        metavar="NAME=DIR",
+        metavar="DIR",
         required=True,
-        help="one declared component, repeatable",
+        help="one component directory; identity comes from its strata_features.toml; repeatable",
     )
     generate_parser.add_argument("--preset", required=True, help="preset name")
     generate_parser.add_argument("--out", required=True, help="output directory")
@@ -39,17 +39,14 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def parse_components(specs: list[str]) -> list[tuple[str, str]]:
-    pairs: list[tuple[str, str]] = []
+def parse_components(specs: list[str]) -> list[str]:
     for spec in specs:
-        name, separator, directory = spec.partition("=")
-        if not separator or not name or not directory:
+        if not spec.strip():
             raise StrataError(
-                f'Invalid --component value "{spec}".',
-                hints=["Expected NAME=DIR, for example ctl=components/ctl."],
+                'Invalid --component value "".',
+                hints=["Pass the component directory, for example components/ctl."],
             )
-        pairs.append((name, directory))
-    return pairs
+    return specs
 
 
 def main(argv: list[str] | None = None) -> int:

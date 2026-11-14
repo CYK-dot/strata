@@ -3,11 +3,15 @@
 #
 # strata - CMake integration.
 #
-#   strata_add_project(SCHEMA <dir> PRESETS <dir> [OUT <dir>])
-#   strata_add_component(<name> <directory>)
+#   strata_project(SCHEMA <dir> PRESETS <dir> [OUT <dir>])
+#   strata_add_component_path(<directory>)
 #   strata_link_resolves(<target>)
 #   strata_get_feature(<id> <out-var>)
 #   strata_get_config(<id> <out-var>)
+#
+# The component's identity is not the directory's: the top-level
+# `component = "ctl"` line in its strata_features.toml names it, and the
+# top-level `requires` line names the components it reads from.
 #
 # The product is chosen when configuring, not in this file:
 #
@@ -19,12 +23,17 @@ if(NOT DEFINED STRATA_PYTHON)
   set(STRATA_PYTHON "python" CACHE FILEPATH "Python interpreter used to run strata")
 endif()
 
+# The strata package lives next to this cmake/ directory. Its parent goes on
+# PYTHONPATH for the generate step, so the invocation does not depend on where
+# the package sits relative to CMAKE_SOURCE_DIR.
+get_filename_component(_STRATA_PACKAGE_PARENT "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
 
-macro(strata_add_project)
+
+macro(strata_project)
   cmake_parse_arguments(_STRATA "" "SCHEMA;PRESETS;OUT;PRESET" "" ${ARGN})
 
   if(NOT _STRATA_SCHEMA OR NOT _STRATA_PRESETS)
-    message(FATAL_ERROR "strata_add_project: SCHEMA and PRESETS are required")
+    message(FATAL_ERROR "strata_project: SCHEMA and PRESETS are required")
   endif()
 
   if(_STRATA_PRESET)
@@ -45,46 +54,56 @@ macro(strata_add_project)
   set(STRATA_SCHEMA_DIR  "${_STRATA_SCHEMA}"  CACHE INTERNAL "strata: schema directory")
   set(STRATA_PRESETS_DIR "${_STRATA_PRESETS}" CACHE INTERNAL "strata: presets directory")
   set(STRATA_OUT_DIR     "${_strata_out}"     CACHE INTERNAL "strata: output directory")
-  set_property(GLOBAL PROPERTY STRATA_COMPONENT_SPECS "")
+  set_property(GLOBAL PROPERTY STRATA_COMPONENT_DIRS "")
   set(STRATA_GENERATED FALSE CACHE INTERNAL "strata: generation done")
 endmacro()
 
 
-function(strata_add_component name)
-  if(ARGC LESS 2)
-    message(FATAL_ERROR
-            "strata_add_component: give the component directory as the second argument")
+function(strata_add_component_path directory)
+  if(ARGC GREATER 1)
+    message(FATAL_ERROR "strata_add_component_path: expected one <directory>, got ${ARGN}")
   endif()
-  if(ARGC GREATER 2)
-    message(FATAL_ERROR "strata_add_component: expected <name> <directory>, got ${ARGN}")
-  endif()
-  set_property(GLOBAL APPEND PROPERTY STRATA_COMPONENT_SPECS "${name}=${ARGV1}")
+  set_property(GLOBAL APPEND PROPERTY STRATA_COMPONENT_DIRS "${directory}")
 endfunction()
 
 
-# Generation is deferred until something needs the values, because components are
-# declared after strata_add_project(). _strata_ensure is a macro so the generated
-# .cmake lands in the caller's scope, where the values are then read.
+# Generation is deferred until something needs the values, because components
+# are declared after strata_project(). All strata_add_component_path() calls
+# must come before the first consumer; generation runs once, with whatever the
+# graph holds at that point. _strata_ensure is a macro so the generated .cmake
+# lands in the caller's scope, where the values are then read.
 macro(_strata_ensure)
   if(NOT STRATA_GENERATED)
     if(NOT STRATA_SCHEMA_DIR)
-      message(FATAL_ERROR "strata: call strata_add_project() before anything else")
+      message(FATAL_ERROR "strata: call strata_project() before anything else")
     endif()
 
-    get_property(_strata_specs GLOBAL PROPERTY STRATA_COMPONENT_SPECS)
-    if(NOT _strata_specs)
+    get_property(_strata_dirs GLOBAL PROPERTY STRATA_COMPONENT_DIRS)
+    if(NOT _strata_dirs)
       message(FATAL_ERROR
               "strata: no components declared.\n"
-              "Call strata_add_component(<name> <directory>) for each one.")
+              "Call strata_add_component_path(<directory>) for each one.")
     endif()
 
     set(_strata_args "")
-    foreach(_strata_spec IN LISTS _strata_specs)
-      list(APPEND _strata_args --component "${_strata_spec}")
+    foreach(_strata_dir IN LISTS _strata_dirs)
+      list(APPEND _strata_args --component "${_strata_dir}")
     endforeach()
 
+    set(_strata_pythonpath "${_STRATA_PACKAGE_PARENT}")
+    if(DEFINED ENV{PYTHONPATH} AND NOT "$ENV{PYTHONPATH}" STREQUAL "")
+      if(WIN32)
+        set(_strata_sep ";")
+      else()
+        set(_strata_sep ":")
+      endif()
+      string(APPEND _strata_pythonpath "${_strata_sep}$ENV{PYTHONPATH}")
+    endif()
+
     execute_process(
-      COMMAND "${STRATA_PYTHON}" -m strata generate
+      COMMAND "${CMAKE_COMMAND}" -E env
+              "PYTHONPATH=${_strata_pythonpath}"
+              "${STRATA_PYTHON}" -m strata generate
               --schema  "${STRATA_SCHEMA_DIR}"
               --presets "${STRATA_PRESETS_DIR}"
               ${_strata_args}
@@ -97,7 +116,7 @@ macro(_strata_ensure)
       message(FATAL_ERROR "strata: generation failed (see the messages above).")
     endif()
 
-    _strata_watch_inputs("${_strata_specs}")
+    _strata_watch_inputs("${_strata_dirs}")
     set(STRATA_GENERATED TRUE CACHE INTERNAL "strata: generation done")
   endif()
 
@@ -106,12 +125,9 @@ macro(_strata_ensure)
 endmacro()
 
 
-function(_strata_watch_inputs specs)
+function(_strata_watch_inputs dirs)
   file(GLOB _inputs "${STRATA_SCHEMA_DIR}/*.toml" "${STRATA_PRESETS_DIR}/${STRATA_PRESET}.toml")
-  foreach(spec IN LISTS specs)
-    string(FIND "${spec}" "=" _eq)
-    string(SUBSTRING "${spec}" ${_eq} -1 _rest)
-    string(SUBSTRING "${_rest}" 1 -1 _dir)
+  foreach(_dir IN LISTS dirs)
     file(GLOB_RECURSE _component_files "${_dir}/strata_features.*")
     list(APPEND _inputs ${_component_files})
   endforeach()

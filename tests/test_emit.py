@@ -12,7 +12,7 @@ def _generate(paths, name: str = "p1"):
     return generate(
         schema_dir=paths.schema,
         presets_dir=paths.presets,
-        components=paths.component_pairs,
+        components=paths.component_dirs,
         preset_name=name,
         out_dir=paths.out,
     )
@@ -54,7 +54,10 @@ def test_manifest_records_provenance(project):
     assert manifest["preset"] == "p1"
     assert manifest["features"]["app.DOUBLE"]["value"] == 8
     assert manifest["features"]["app.DOUBLE"]["by"] == ["a.count"]
+    assert manifest["features"]["app.DOUBLE"]["from"] == []
     assert manifest["features"]["app.FLAG"]["by"] == ["a.on"]
+    assert manifest["components"]["app"]["features"] == ["app.DOUBLE", "app.FLAG"]
+    assert manifest["components"]["app"]["requires"] == []
     assert "schema/base.toml" in manifest["inputs"]
 
 

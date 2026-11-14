@@ -15,7 +15,7 @@ from strata.errors import StrataError
 def _resolve(paths, preset_name: str = "p1"):
     loaded_schema = schema_engine.load(paths.schema)
     loaded_preset = preset_engine.load(paths.presets, preset_name, loaded_schema)
-    found = components_engine.load_all(paths.component_pairs)
+    found = components_engine.load_all(paths.component_dirs)
     return resolve_engine.resolve_all(found, loaded_preset.values)
 
 
@@ -131,9 +131,7 @@ def test_float_accepts_int_and_coerces(project):
     paths = project(
         {
             "components/app/feature/strata_features.toml": """
-[meta]
 component = "app"
-layer     = "app"
 
 [[feature]]
 name = "app.RATIO"

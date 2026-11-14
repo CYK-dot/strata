@@ -11,9 +11,9 @@ from types import SimpleNamespace
 
 import pytest
 
-DEMO_ROOT = Path(__file__).resolve().parents[2]
-if str(DEMO_ROOT) not in sys.path:
-    sys.path.insert(0, str(DEMO_ROOT))
+STRATA_PARENT = Path(__file__).resolve().parents[2]
+if str(STRATA_PARENT) not in sys.path:
+    sys.path.insert(0, str(STRATA_PARENT))
 
 from strata.feature import clear as clear_registry  # noqa: E402
 
@@ -50,6 +50,8 @@ preset = "p1"
 a.count = 4
 """,
     "components/app/feature/strata_features.toml": """
+component = "app"
+
 [[feature]]
 name = "app.DOUBLE"
 type = "int"
@@ -89,7 +91,7 @@ def project(tmp_path: Path):
             schema=root / "configs" / "schema",
             presets=root / "configs" / "presets",
             components=root / "components",
-            component_pairs=[("app", root / "components" / "app")],
+            component_dirs=[root / "components" / "app"],
             out=root / "build" / "generated",
         )
 
