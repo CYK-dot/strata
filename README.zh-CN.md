@@ -214,6 +214,15 @@ build/generated/
 
 命名规则：`ctl.MAX_TUNNEL_SESSIONS` 在 C 侧是 `STRATA_FEATURE_CTL_MAX_TUNNEL_SESSIONS`，在 CMake 侧是 `STRATA_FEATURE_ctl.MAX_TUNNEL_SESSIONS`；配置项 `chip.pioc` 是 `STRATA_CONFIG_CHIP_PIOC`。两队前缀不交叉，光看前缀就知道手里拿的是**配置项**还是**feature**。
 
+## 设计文档
+
+推理与契约放在 [doc/](doc/)：
+
+- [价值论证](doc/value.md)
+- [目标定义](doc/goals.md)
+- [规格与约束](doc/spec.md)
+- [迭代设计](doc/iterations/README.md)：当前只有 0001（DAG 依赖）
+
 ## 许可证
 
 Copyright (C) 2026 CYK-Dot。

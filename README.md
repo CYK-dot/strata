@@ -285,6 +285,17 @@ Naming: a feature `ctl.MAX_TUNNEL_SESSIONS` becomes
 `chip.pioc` becomes `STRATA_CONFIG_CHIP_PIOC`. The two prefixes never overlap, so
 the prefix alone tells you whether you are holding an item or a feature.
 
+## Design docs
+
+The reasoning and the behavior contract live in [doc/](doc/):
+
+- [Value](doc/value.md) — why strata exists.
+- [Goals](doc/goals.md) — what it is, what it is not, how success is judged.
+- [Specification](doc/spec.md) — the current behavior contract.
+- [Iterations](doc/iterations/README.md) — design records; currently 0001 (DAG dependencies).
+
+The docs are written in Chinese.
+
 ## License
 
 Copyright (C) 2026 CYK-Dot.
