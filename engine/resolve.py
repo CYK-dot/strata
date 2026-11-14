@@ -98,7 +98,7 @@ def resolve_all(components: list[Component], config_values: dict[str, Any]) -> l
                 raise StrataError(
                     exc.message,
                     file=component.resolver_file,
-                    line=_firstlineno(resolver),
+                    line=_reading_line(exc, component.resolver_file) or _firstlineno(resolver),
                     hints=[exc.hint] if exc.hint else (),
                 ) from None
             except StrataError:
@@ -136,6 +136,21 @@ def _ordered(edges: dict[str, list[str]], what: str, file: object) -> list[str]:
 def _firstlineno(func) -> int | None:
     code = getattr(func, "__code__", None)
     return code.co_firstlineno if code else None
+
+
+def _reading_line(exc: FeatureAccessError, resolver_file) -> int | None:
+    """The line of the resolver that was executing when the failed read happened.
+
+    The caught exception's traceback walks from this frame down to the raise
+    inside the view; the resolver's frame is the one between them.
+    """
+    filename = str(resolver_file)
+    tb = exc.__traceback__
+    while tb is not None:
+        if tb.tb_frame.f_code.co_filename == filename:
+            return tb.tb_lineno
+        tb = tb.tb_next
+    return None
 
 
 class FeatureView:

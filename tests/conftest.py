@@ -78,10 +78,14 @@ def flag(config):
 
 @pytest.fixture
 def project(tmp_path: Path):
-    """Create a minimal but complete project; returns its paths."""
+    """Create a minimal but complete project; returns its paths.
 
-    def build(files: dict[str, str] | None = None) -> SimpleNamespace:
-        root = tmp_path / "proj"
+    Pass a distinct ``name`` when a test needs two independent trees; a second
+    call with the same name overwrites the first.
+    """
+
+    def build(files: dict[str, str] | None = None, name: str = "proj") -> SimpleNamespace:
+        root = tmp_path / name
         root.mkdir(parents=True, exist_ok=True)
         write_tree(root, dict(BASE_FILES))
         if files:

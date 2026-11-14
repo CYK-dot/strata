@@ -164,6 +164,15 @@ def _configure_text(proc: subprocess.CompletedProcess) -> str:
     return proc.stdout + proc.stderr
 
 
+def _flat(proc: subprocess.CompletedProcess) -> str:
+    """The whole configure output with CMake's message wrapping collapsed.
+
+    CMake hard-wraps long diagnostics at a column that depends on the file
+    path length, so message-text assertions must not depend on the breaks.
+    """
+    return " ".join(_configure_text(proc).split())
+
+
 # T23 (C1): strata_project plus directories only; the component names come
 # from the TOML files, not from the directory names.
 def test_t23_project_and_component_paths(tmp_path):
@@ -222,8 +231,8 @@ type = "int"
     output = _configure_text(proc)
     assert proc.returncode != 0
     assert "CMake Error at " in output
-    assert 'Component "app" requires "nosuch", which is not declared.' in output
-    assert "strata: generation failed" in output
+    assert 'Component "app" requires "nosuch", which is not declared.' in _flat(proc)
+    assert "strata: generation failed" in _flat(proc)
     diagnostic_start = output.index("CMake Error at ")
     assert output[diagnostic_start:].isascii()
 
@@ -251,4 +260,94 @@ strata_add_component_path({components}/c_lib)
     proc = _configure(root, tmp_path / "build")
     output = _configure_text(proc)
     assert proc.returncode != 0
-    assert 'Component "app" requires "lib", which is not declared.' in output
+    assert 'Component "app" requires "lib", which is not declared.' in _flat(proc)
+
+
+# R8, the silent case: a component nobody depends on, added after the first
+# consumer, would be dropped without a trace. It is a hard error instead.
+def test_component_added_after_the_first_consumer_is_rejected(tmp_path):
+    root = _project(tmp_path / "proj")
+    _write(
+        root / "components" / "c_app" / "feature" / "strata_features.toml",
+        """
+component = "app"
+
+[[feature]]
+name = "app.SUM"
+type = "int"
+""",
+    )
+    _write(
+        root / "components" / "c_app" / "feature" / "strata_features.py",
+        """
+from strata import feature
+
+
+@feature("app.SUM")
+def sum_(config):
+    return config.a.count
+""",
+    )
+    _write_cmakelists(
+        root,
+        """\
+include(strata)
+
+strata_project(
+  SCHEMA  {schema}
+  PRESETS {presets}
+)
+
+strata_add_component_path({components}/c_app)
+strata_get_feature("app.SUM" scratch_sum)
+
+strata_add_component_path({components}/c_lib)
+""",
+    )
+    proc = _configure(root, tmp_path / "build")
+    output = _configure_text(proc)
+    assert proc.returncode != 0
+    assert "too late; the feature graph has already been generated" in _flat(proc)
+
+
+# Adding a component before the project would be silently discarded by the
+# strata_project reset; it is an error instead.
+def test_component_added_before_the_project_is_rejected(tmp_path):
+    root = _project(tmp_path / "proj")
+    _write_cmakelists(
+        root,
+        """\
+include(strata)
+
+strata_add_component_path({components}/c_app)
+
+strata_project(
+  SCHEMA  {schema}
+  PRESETS {presets}
+)
+""",
+    )
+    proc = _configure(root, tmp_path / "build")
+    assert proc.returncode != 0
+    assert "call strata_project() before adding components" in _flat(proc)
+
+
+# The preset is a cache variable, never an argument in the build file.
+def test_project_rejects_a_preset_argument(tmp_path):
+    root = _project(tmp_path / "proj")
+    _write_cmakelists(
+        root,
+        """\
+include(strata)
+
+strata_project(
+  SCHEMA  {schema}
+  PRESETS {presets}
+  PRESET  p1
+)
+""",
+    )
+    proc = _configure(root, tmp_path / "build")
+    assert proc.returncode != 0
+    assert "unexpected arguments" in _flat(proc)
+    assert "The preset is not an argument" in _flat(proc)

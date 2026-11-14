@@ -30,7 +30,13 @@ get_filename_component(_STRATA_PACKAGE_PARENT "${CMAKE_CURRENT_LIST_DIR}/../.." 
 
 
 macro(strata_project)
-  cmake_parse_arguments(_STRATA "" "SCHEMA;PRESETS;OUT;PRESET" "" ${ARGN})
+  cmake_parse_arguments(_STRATA "" "SCHEMA;PRESETS;OUT" "" ${ARGN})
+
+  if(_STRATA_UNPARSED_ARGUMENTS)
+    message(FATAL_ERROR
+            "strata_project: unexpected arguments: ${_STRATA_UNPARSED_ARGUMENTS}\n"
+            "The preset is not an argument; configure with -DSTRATA_PRESET=<name>.")
+  endif()
 
   if(NOT _STRATA_SCHEMA OR NOT _STRATA_PRESETS)
     message(FATAL_ERROR "strata_project: SCHEMA and PRESETS are required")
@@ -62,6 +68,15 @@ endmacro()
 function(strata_add_component_path directory)
   if(ARGC GREATER 1)
     message(FATAL_ERROR "strata_add_component_path: expected one <directory>, got ${ARGN}")
+  endif()
+  if(NOT STRATA_SCHEMA_DIR)
+    message(FATAL_ERROR
+            "strata_add_component_path: call strata_project() before adding components.")
+  endif()
+  if(STRATA_GENERATED)
+    message(FATAL_ERROR
+            "strata_add_component_path: too late; the feature graph has already been generated.\n"
+            "Move every strata_add_component_path above the first consumer.")
   endif()
   set_property(GLOBAL APPEND PROPERTY STRATA_COMPONENT_DIRS "${directory}")
 endfunction()

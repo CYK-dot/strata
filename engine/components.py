@@ -393,6 +393,15 @@ def _validate(components: list[Component]) -> None:
         for decl in component.declarations:
             for target in decl.requires:
                 if not FEATURE_ID_RE.match(target):
+                    if COMPONENT_ID_RE.match(target):
+                        raise StrataError(
+                            f'Feature "{decl.name}" requires "{target}"; "{target}" '
+                            "looks like a component id. Component-level requires "
+                            "belong at the top of the file, before any "
+                            "[[feature]] table.",
+                            file=decl.file,
+                            line=decl.line,
+                        )
                     raise StrataError(
                         f'Feature "{decl.name}" requires "{target}", '
                         "which is not a valid feature id.",

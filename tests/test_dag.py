@@ -907,10 +907,10 @@ def x(config, features):
 # TOML entries and requires entries change only the input hashes, so the
 # derived artifacts are compared with the banner digest and the inputs section
 # normalized away.
-def test_t21_component_declaration_order_is_irrelevant(project, tmp_path):
-    first = project(dict(TWO_TREE))
+def test_t21_component_declaration_order_is_irrelevant(project):
+    first = project(dict(TWO_TREE), name="one")
     first.component_dirs = [first.components / "app", first.components / "lib"]
-    second = project(dict(TWO_TREE))
+    second = project(dict(TWO_TREE), name="two")
     second.component_dirs = [second.components / "lib", second.components / "app"]
 
     _generate(first)
@@ -925,8 +925,8 @@ def test_t21_component_declaration_order_is_irrelevant(project, tmp_path):
         assert (first.out / name).read_bytes() == (second.out / name).read_bytes()
 
 
-def test_t21_toml_entry_and_requires_order_are_irrelevant(project, tmp_path):
-    ordered = project(dict(TWO_TREE))
+def test_t21_toml_entry_and_requires_order_are_irrelevant(project):
+    ordered = project(dict(TWO_TREE), name="ordered")
     ordered.component_dirs = [ordered.components / "app", ordered.components / "lib"]
 
     shuffled = project(
@@ -957,7 +957,8 @@ type = "int"
             "components/app/feature/strata_features.py": TWO_TREE[
                 "components/app/feature/strata_features.py"
             ],
-        }
+        },
+        name="shuffled",
     )
     shuffled.component_dirs = [shuffled.components / "lib", shuffled.components / "app"]
 
@@ -1163,3 +1164,72 @@ def x(config, features):
     with pytest.raises(StrataError) as excinfo:
         _generate(paths)
     assert 'Component "app" requires "lib", which is not declared.' in str(excinfo.value)
+
+
+# A read-time failure names the line that performed the read, not the first
+# line of the resolver.
+def test_read_error_points_at_the_reading_line(project):
+    content = '''
+from strata import feature
+
+
+@feature("app.Y")
+def y(config):
+    return 1
+
+
+@feature("app.X")
+def x(config, features):
+    pad = 1
+    return features["app.Y"]
+'''
+    paths = project(
+        {
+            "components/app/feature/strata_features.toml": """
+component = "app"
+
+[[feature]]
+name = "app.Y"
+type = "int"
+
+[[feature]]
+name = "app.X"
+type = "int"
+""",
+            "components/app/feature/strata_features.py": content,
+        }
+    )
+    with pytest.raises(StrataError) as excinfo:
+        _generate(paths)
+    reading_line = content.splitlines().index('    return features["app.Y"]') + 1
+    assert f"strata_features.py:{reading_line}" in str(excinfo.value)
+
+
+# `requires = ["lib"]` inside a [[feature]] table gets the targeted hint that
+# component-level requires belong at the top of the file.
+def test_component_id_in_feature_requires_gets_a_move_hint(project):
+    paths = project(
+        {
+            "components/app/feature/strata_features.toml": """
+component = "app"
+
+[[feature]]
+name = "app.X"
+type = "int"
+requires = ["lib"]
+""",
+            "components/app/feature/strata_features.py": """
+from strata import feature
+
+
+@feature("app.X")
+def x(config):
+    return 1
+""",
+        }
+    )
+    with pytest.raises(StrataError) as excinfo:
+        _load(paths)
+    rendered = str(excinfo.value)
+    assert 'Feature "app.X" requires "lib"; "lib" looks like a component id.' in rendered
+    assert "before any [[feature]] table." in rendered
